@@ -1,0 +1,11 @@
+lr: 0.001
+l1: 0
+l2: 0
+type: sgd
+momentum: 0
+#Annealing:
+#  type: cosine/exponential/step/...
+#  altri parametri in base al tipo
+#Early_stopping:
+#  tolerance: ...
+#  type:

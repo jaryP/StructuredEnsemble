@@ -1,0 +1,13 @@
+method: s_snip
+name: 70
+save_path: experiments/mnist/s_snip_prova
+save: Yes
+load: No
+optimizer: configs/optimizers/sgd_vgg11.yaml
+trainer: configs/training/cifar10.yaml
+device: 0
+method_parameters:
+  iterative: No
+  prune_percentage: 0.70
+  global_pruning: Yes
+

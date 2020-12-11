@@ -1,0 +1,24 @@
+method: bayesian_mask
+name: 95a
+save_path: experiments/mnist/supermask_laplace
+save_model: Yes
+load_model: No
+optimizer: configs/optimizers/sgd_vgg11.yaml
+trainer: configs/training/mnist.yaml
+device: 0
+method_parameters:
+  global_pruning: Yes
+  prune_percentage: 0.95
+  mask_epochs: 10
+  supermask:
+    name: beta
+    initialization:
+      name: beta
+      a: 2
+      b: 2
+  prior:
+    divergence_w: 0.001
+    divergence: kl
+    name: beta
+    a: 2
+    b: 2

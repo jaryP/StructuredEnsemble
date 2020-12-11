@@ -1,0 +1,26 @@
+method: s_supermask
+name: 50
+save_path: results/ensemble/mnist/s_supermask/beta
+save: No
+load: No
+optimizer: configs/optimizers/sgd_vgg11.yaml
+trainer: configs/training/mnist.yaml
+device: 0
+method_parameters:
+  prune_percentage: 0.50
+#  global_pruning: No
+  mask_epochs: 1
+  ensemble: 2
+  supermask:
+    name: beta
+    initialization:
+      a:
+        name: uniform
+        low: 0
+        high: 5
+      b:
+        name: uniform
+        low: 0
+        high: 5
+
+

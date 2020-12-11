@@ -1,0 +1,13 @@
+experiments:
+  normal:
+    path: configs/experiments/mnist/normal.yaml
+  random_mask:
+    path: configs/experiments/mnist/random_mask
+  snip:
+    path: configs/experiments/mnist/snip
+  lapalce_mask:
+    path: configs/experiments/mnist/supermask/laplace
+  weights_mask:
+    path: configs/experiments/mnist/supermask/weights
+  weights_mask_binary:
+    path: configs/experiments/mnist/supermask/binary_weights

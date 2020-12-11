@@ -1,0 +1,14 @@
+method: magnitude_pruning
+name: exp1
+save_path: experiments/results
+save_model: Yes
+load_model: No
+optimizer: configs/optimizers/sgd.yaml
+trainer: configs/training/mnist.yaml
+device: 0
+method_parameters:
+  iterative: No
+  pruning_before_training: Yes
+  prune_percentage: 0.9
+  global_pruning: No
+
