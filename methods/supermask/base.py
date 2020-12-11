@@ -6,7 +6,7 @@ import torch
 from torch import nn as nn
 from torchvision.models import VGG
 
-from trainable_masks import TrainableBeta, TrainableWeights, TrainableLaplace
+from .trainable_masks import TrainableBeta, TrainableWeights, TrainableLaplace
 
 
 class EnsembleMaskedWrapper(nn.Module):
@@ -138,34 +138,47 @@ class EnsembleMaskedWrapper(nn.Module):
 
 
 @torch.no_grad()
-def get_mask(module, prune_percentage, distribution=-1):
+def get_mask(module, prune_percentage, distribution=-1, threshold=None):
 
     assert isinstance(module, EnsembleMaskedWrapper)
 
     module.set_distribution(distribution)
-    threshold = torch.quantile(module.mask, q=prune_percentage)
+    if threshold is None:
+        threshold = torch.quantile(module.mask, q=prune_percentage)
     mask = torch.ge(module.mask, threshold).float()
 
     return mask
 
 
 @torch.no_grad()
-def register_masks(model, prune_percentage, distribution=-1):
+def register_masks(model, prune_percentage, distribution=-1, global_pruning=False):
     masks = {}
+    threshold = None
+
+    if global_pruning:
+        _masks = []
+        for name, module in model.named_modules():
+            if isinstance(module, EnsembleMaskedWrapper):
+                module.set_distribution(distribution)
+                _masks.append(module.mask.detach().abs().view(-1).cpu().numpy())
+
+        _masks = np.concatenate(_masks)
+        threshold = np.quantile(_masks, q=prune_percentage)
+
     for name, module in model.named_modules():
         if isinstance(module, EnsembleMaskedWrapper):
-            mask = get_mask(module, prune_percentage, distribution).squeeze()
+            mask = get_mask(module, prune_percentage, distribution, threshold=threshold).squeeze()
             module.layer.register_buffer('mask', mask)
             masks[name] = mask
 
     return masks
 
 
-def extract_distribution_subnetwork(model, prune_percentage, distribution):
+def extract_distribution_subnetwork(model, prune_percentage, distribution, re_init=True, global_pruning=False):
     m = deepcopy(model)
-    _ = register_masks(m, prune_percentage, distribution)
+    _ = register_masks(m, prune_percentage, distribution, global_pruning=global_pruning)
     masked_to_layer(m)
-    extract_structured(m)
+    extract_structured(m, re_init=re_init)
 
     return m
 
@@ -205,7 +218,7 @@ def masked_to_layer(module):
         assert False
 
 
-def extract_structured(model):
+def extract_structured(model, re_init=False):
     def create_layer(layer, new_w):
         if isinstance(layer, nn.Linear):
             o, i = new_w.shape
@@ -218,7 +231,8 @@ def extract_structured(model):
         else:
             assert False
 
-        nl.weight.data = new_w.data
+        if not re_init:
+            nl.weight.data = new_w.data
 
         return nl
 
@@ -255,3 +269,28 @@ def extract_structured(model):
         assert False
 
     return model
+    optim = optimizer(model.parameters())
+
+    train_scheduler = scheduler(optim)
+
+    model.train()
+
+    for e in tqdm(range(epochs)):
+        model.train()
+        losses = []
+        for i, (x, y) in enumerate(train_loader):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            loss = nn.functional.cross_entropy(pred, y, reduction='none')
+            losses.extend(loss.tolist())
+            loss = loss.mean()
+            optim.zero_grad()
+            loss.backward()
+            optim.step()
+
+        if eval_loader is not None:
+            eval_scores = eval_model(model, eval_loader, device=device, topk=[1, 5])
+        else:
+            eval_scores = 0
+
+        losses = sum(losses) / len(losses)

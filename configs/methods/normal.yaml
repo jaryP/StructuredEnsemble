@@ -1,7 +1,0 @@
-method: normal
-name: exp1
-save_path: experiments/mnist/normal
-load_model: No
-optimizer: configs/optimizers/sgd_vgg11.yaml
-trainer: configs/training/mnist.yaml
-device: 0

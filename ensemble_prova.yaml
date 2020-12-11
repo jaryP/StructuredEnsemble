@@ -7,10 +7,11 @@ optimizer: configs/optimizers/sgd_vgg11.yaml
 trainer: configs/training/mnist.yaml
 device: 0
 method_parameters:
-  prune_percentage: 0.50
-#  global_pruning: No
-  mask_epochs: 1
-  ensemble: 2
+  prune_percentage: 0.5
+  global_pruning: No
+  re_init: Yes
+  mask_epochs: 5
+  ensemble: 5
   supermask:
     name: beta
     initialization:

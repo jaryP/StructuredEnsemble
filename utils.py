@@ -1,5 +1,4 @@
 import os
-from collections import defaultdict
 
 import numpy as np
 import torch
@@ -8,7 +7,9 @@ from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import StepLR, MultiStepLR
 from torchvision.models import vgg11
 from torchvision.transforms import transforms
+from tqdm import tqdm
 
+from eval import eval_model
 from models import LeNet, LeNet_300_100
 
 
@@ -16,7 +17,8 @@ class EarlyStopping:
     def __init__(self, tolerance, min=True, **kwargs):
         self.initial_tolerance = tolerance
         self.tolerance = tolerance
-        if min:
+        self.min = min
+        if self.min:
             self.current_value = np.inf
             self.c = lambda a, b: a < b
         else:
@@ -34,9 +36,15 @@ class EarlyStopping:
                 return -1
         return 0
 
-
-# def path_exists(path):
-#     return os.path.exists(path)
+    def reset(self):
+        self.tolerance = self.initial_tolerance
+        self.current_value = 0
+        if self.min:
+            self.current_value = np.inf
+            self.c = lambda a, b: a < b
+        else:
+            self.current_value = -np.inf
+            self.c = lambda a, b: a > b
 
 
 def ensures_path(path):
@@ -192,58 +200,55 @@ def get_optimizer(optimizer: str, lr: float, momentum: float = 0, l1: float = 0,
     return opt, l1loss, scheduler
 
 
-@torch.no_grad()
-def eval_model(model, dataset, topk=None, device='cpu'):
-    model.eval()
-    predictions = []
-    true = []
+def train_model(model, optimizer, train_loader, epochs, scheduler, early_stopping=None,
+                test_loader=None, eval_loader=None, device='cpu'):
 
-    with torch.no_grad():
-        for x, y in dataset:
-            true.extend(y.tolist())
+    scores = []
+
+    best_model = model.state_dict()
+    best_model_i = 0
+    model.to(device)
+
+    # train_scheduler = scheduler(optimizer)
+
+    model.train()
+    for epoch in tqdm(range(epochs)):
+        model.train()
+        losses = []
+        for i, (x, y) in enumerate(train_loader):
             x, y = x.to(device), y.to(device)
-            outputs = model(x)
-            top_classes = torch.topk(outputs, outputs.size(-1))[1]
-            predictions.extend(top_classes.tolist())
+            pred = model(x)
+            loss = torch.nn.functional.cross_entropy(pred, y, reduction='none')
+            losses.extend(loss.tolist())
+            loss = loss.mean()
 
-    predictions = np.asarray(predictions)
-    true = np.asarray(true)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
-    accuracies = accuracy_score(true, predictions, topk=topk)
+        if scheduler is not None:
+            if isinstance(scheduler, (StepLR, MultiStepLR)):
+                scheduler.step()
 
-    # cm = confusion_matrix(true, predictions)
-    # TODO: aggiungere calcolo f1 score
+        if eval_loader is not None:
+            eval_scores = eval_model(model, eval_loader, device=device, topk=[1, 5])
+        else:
+            eval_scores = 0
 
-    return accuracies
+        losses = sum(losses) / len(losses)
 
+        if early_stopping is not None:
+            r = early_stopping.step(eval_scores[1]) if eval_loader is not None else early_stopping.step(losses)
 
-def accuracy_score(expected: np.asarray, predicted: np.asarray, topk=None):
-    if topk is None:
-        topk = [1, 5]
+            if r < 0:
+                break
+            elif r > 0:
+                best_model = model.state_dict()
+                best_model_i = epoch
 
-    if isinstance(topk, int):
-        topk = [topk]
+        train_scores = eval_model(model, train_loader, device=device)
+        test_scores = eval_model(model, test_loader, device=device)
 
-    assert len(expected) == len(predicted)
-    assert predicted.shape[1] >= max(topk)
+        scores.append((train_scores, eval_scores, test_scores))
 
-    res = defaultdict(int)
-    total = len(expected)
-
-    for t, p in zip(expected, predicted):
-        for k in topk:
-            if t in p[:k]:
-                res[k] += 1
-
-    res = {k: v / total for k, v in res.items()}
-
-    return res
-
-
-def confusion_matrix(true: np.asarray, pred: np.asarray, ):
-    num_classes = np.max(true) + 1
-    pred = pred[:, 0]
-    m = np.zeros((num_classes, num_classes), dtype=int)
-    for pred, exp in zip(pred, true):
-        m[pred][exp] += 1
-    return m
+    return best_model, scores, scores[best_model_i]

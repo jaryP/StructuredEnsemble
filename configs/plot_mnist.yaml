@@ -1,6 +1,6 @@
 experiments:
   normal:
-    path: configs/experiments/mnist/normal.yaml
+    path: configs/experiments/mnist/naive_5.yaml
   random_mask:
     path: configs/experiments/mnist/random_mask
   snip:
