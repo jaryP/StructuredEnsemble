@@ -1,5 +1,5 @@
 method: s_supermask
-name: 50
+name: 35
 save_path: results/ensemble/mnist/s_supermask/beta
 save: No
 load: No
@@ -7,7 +7,7 @@ optimizer: configs/optimizers/sgd_vgg11.yaml
 trainer: configs/training/mnist.yaml
 device: 0
 method_parameters:
-  prune_percentage: 0.5
+  prune_percentage: 0.35
   global_pruning: No
   re_init: Yes
   mask_epochs: 5

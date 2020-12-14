@@ -4,41 +4,6 @@ import numpy as np
 import torch
 
 
-def eval_models(model, dataset, topk=None, device='cpu'):
-    if not isinstance(model, list):
-        model = [model]
-
-    for m in model:
-        m.to(device)
-        m.eval()
-
-    predictions = []
-    true = []
-
-    for x, y in dataset:
-        true.extend(y.tolist())
-        x, y = x.to(device), y.to(device)
-        if len(model) > 1:
-            outputs = torch.stack([m(x) for m in model])
-            outputs = torch.mean(outputs, 0)
-        else:
-            outputs = model[0](x)
-
-        top_classes = torch.topk(outputs, outputs.shape[-1])[1]
-        predictions.extend(top_classes.tolist())
-
-    predictions = np.asarray(predictions)
-    true = np.asarray(true)
-
-    accuracies = accuracy_score(true, predictions, topk=topk)
-
-    # cm = confusion_matrix(true, predictions)
-    # TODO: aggiungere calcolo f1 score
-
-    return accuracies
-
-
-@torch.no_grad()
 def eval_model(model, dataset, topk=None, device='cpu'):
     model.eval()
     predictions = []
@@ -60,6 +25,85 @@ def eval_model(model, dataset, topk=None, device='cpu'):
     # TODO: aggiungere calcolo f1 score
 
     return accuracies
+
+
+def eval_method(method, dataset, topk=None):
+    predictions = []
+    true = []
+
+    for x, y in dataset:
+        true.extend(y.tolist())
+        preds = method.predict_proba(x, y)
+        top_classes = torch.topk(preds, preds.shape[-1])[1]
+        predictions.extend(top_classes.tolist())
+
+    predictions = np.asarray(predictions)
+    true = np.asarray(true)
+
+    accuracies = accuracy_score(true, predictions, topk=topk)
+
+    # cm = confusion_matrix(true, predictions)
+    # TODO: aggiungere calcolo f1 score
+
+    return accuracies
+
+
+# def eval_models(model, dataset, topk=None, device='cpu'):
+#     if not isinstance(model, list):
+#         model = [model]
+#
+#     for m in model:
+#         m.to(device)
+#         m.eval()
+#
+#     predictions = []
+#     true = []
+#
+#     for x, y in dataset:
+#         true.extend(y.tolist())
+#         x, y = x.to(device), y.to(device)
+#         if len(model) > 1:
+#             outputs = torch.stack([m(x) for m in model])
+#             outputs = torch.mean(outputs, 0)
+#         else:
+#             outputs = model[0](x)
+#
+#         top_classes = torch.topk(outputs, outputs.shape[-1])[1]
+#         predictions.extend(top_classes.tolist())
+#
+#     predictions = np.asarray(predictions)
+#     true = np.asarray(true)
+#
+#     accuracies = accuracy_score(true, predictions, topk=topk)
+#
+#     # cm = confusion_matrix(true, predictions)
+#     # TODO: aggiungere calcolo f1 score
+#
+#     return accuracies
+#
+#
+# @torch.no_grad()
+# def eval_model(model, dataset, topk=None, device='cpu'):
+#     model.eval()
+#     predictions = []
+#     true = []
+#
+#     for x, y in dataset:
+#         true.extend(y.tolist())
+#         x, y = x.to(device), y.to(device)
+#         outputs = model(x)
+#         top_classes = torch.topk(outputs, outputs.size(-1))[1]
+#         predictions.extend(top_classes.tolist())
+#
+#     predictions = np.asarray(predictions)
+#     true = np.asarray(true)
+#
+#     accuracies = accuracy_score(true, predictions, topk=topk)
+#
+#     # cm = confusion_matrix(true, predictions)
+#     # TODO: aggiungere calcolo f1 score
+#
+#     return accuracies
 
 
 def accuracy_score(expected: np.asarray, predicted: np.asarray, topk=None):

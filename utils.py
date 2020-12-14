@@ -114,7 +114,7 @@ def get_dataset(name):
         t = torchvision.transforms.Compose([torchvision.transforms.Resize((32, 32)),
                                             torchvision.transforms.ToTensor(),
                                             torchvision.transforms.Normalize((0.1307,), (0.3081,)),
-                                            # nn.Flatten(0)
+                                            torch.nn.Flatten(0)
                                             ])
 
         train_set = torchvision.datasets.MNIST(
@@ -209,10 +209,11 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
     best_model_i = 0
     model.to(device)
 
-    # train_scheduler = scheduler(optimizer)
+    if early_stopping is not None:
+        early_stopping.reset()
 
     model.train()
-    for epoch in tqdm(range(epochs)):
+    for epoch in tqdm(range(epochs), leave=False):
         model.train()
         losses = []
         for i, (x, y) in enumerate(train_loader):
@@ -231,7 +232,7 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
                 scheduler.step()
 
         if eval_loader is not None:
-            eval_scores = eval_model(model, eval_loader, device=device, topk=[1, 5])
+            eval_scores = eval_model(model, eval_loader, topk=[1, 5], device=device)
         else:
             eval_scores = 0
 

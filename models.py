@@ -21,7 +21,7 @@ def LeNet(input_size=None, output=None):
         nn.Flatten(),
         nn.Linear(in_features=120, out_features=84, bias=False),
         nn.Tanh(),
-        nn.Linear(in_features=84, out_features=10, bias=False),
+        nn.Linear(in_features=84, out_features=output, bias=False),
     )
 
     return lenet

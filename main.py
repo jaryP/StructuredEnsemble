@@ -1,16 +1,23 @@
 import os
+import pickle
 import sys
-from copy import deepcopy
 
 import numpy as np
 import torch
-from tqdm import tqdm
 
-from eval import eval_models
-from methods.supermask.supermask_ensamble import EnsembleSupermaskBeforeTraining
-from utils import get_optimizer, get_dataset, get_model, EarlyStopping, ensures_path, train_model
+from eval import eval_method
+from methods import SingleModel, Naive
+from methods.supermask.supermask_class import SuperMask
+from utils import get_optimizer, get_dataset, get_model, EarlyStopping, ensures_path
 import yaml
 import logging
+
+#TODO: implementare stampa dei risultati nel file di log
+#TODO: implementare ECE sscore (calibrazione)
+#TODO: implemetare attacco
+#TODO: implementare conteggio parametri
+
+#TODO: implementare linear layers BE
 
 for experiment in sys.argv[1:]:
 
@@ -71,12 +78,7 @@ for experiment in sys.argv[1:]:
 
         already_present = ensures_path(seed_path)
 
-        # if to_load and os.path.exists(os.path.join(seed_path, 'results.pkl')):
-        #     print(seed_path, 'loaded')
-        #     continue
-
         hs = [logging.StreamHandler(sys.stdout)]
-        # if to_save:
         hs.append(logging.FileHandler(os.path.join(seed_path, 'info.log'), mode='w'))
 
         logging.basicConfig(force=True, level=logging.INFO,
@@ -109,88 +111,47 @@ for experiment in sys.argv[1:]:
 
         method_name = experiment_config.get('method', None).lower()
 
-        if method_name is None:
+        method_parameters = dict(experiment_config.get('method_parameters', {}))
+
+        model = get_model(name=trainer['model'], input_size=input_size, output=classes)
+
+        if method_name is None or method_name == 'normal':
             method_name = 'normal'
-
-        if method_name == 'normal':
-            models = [get_model(name=trainer['model'], input_size=input_size, output=classes)]
-
+            method = SingleModel(model=model, device=device)
         elif method_name == 'naive':
-            method_parameters = dict(experiment_config['method_parameters'])
-            n_ensemble = method_parameters['n_ensemble']
-
-            models = [get_model(name=trainer['model'], input_size=input_size, output=classes) for i in
-                      range(n_ensemble)]
-
+            method = Naive(model=model, device=device, method_parameters=method_parameters)
         elif method_name == 'supermask':
-            model = get_model(name=trainer['model'], input_size=input_size, output=classes)
-            method_parameters = dict(experiment_config['method_parameters'])
-            models = EnsembleSupermaskBeforeTraining(model=model, train_dataset=train_loader, test_dataset=test_loader,
-                                                     optimizer=optimizer, eval_dataset=eval_loader,
-                                                     scheduler=None, regularization=regularization, save_path=None,
-                                                     device=device,
-                                                     **method_parameters)
+            method = SuperMask(model=model, method_parameters=method_parameters)
         else:
             assert False
 
-        # model = get_model(name=trainer['model'], input_size=input_size, output=classes)
-        #
-        # m = deepcopy(model).to(device)
-        # optim = optimizer(m.parameters())
-        # train_scheduler = scheduler(optim)
-        #
-        # best_model, scores, best_model_scores = train_model(model=m, optimizer=optim,
-        #                                                     train_loader=train_loader,
-        #                                                     epochs=epochs,
-        #                                                     scheduler=train_scheduler,
-        #                                                     early_stopping=None,
-        #                                                     test_loader=test_loader, eval_loader=eval_loader,
-        #                                                     device=device)
-        #
-        # print('Best model scores:\nTrain {}, Eval: {}, Test: {}'.format(best_model_scores[0], best_model_scores[1],
-        #                                                                 best_model_scores[2]))
-        #
-        # method_parameters = dict(experiment_config['method_parameters'])
-        # models = EnsembleSupermaskBeforeTraining(model=model, train_dataset=train_loader, test_dataset=test_loader,
-        #                                          optimizer=optimizer, eval_dataset=eval_loader,
-        #                                          scheduler=None, regularization=regularization, save_path=None,
-        #                                          device=device,
-        #                                          **method_parameters)
-        #
-        # complete_model_params = sum(module.weight.numel() for name, module in model.named_modules()
-        #                             if hasattr(module, 'weight'))
+        if to_load and os.path.exists(os.path.join(seed_path, 'results.pkl')):
+            method.load(os.path.join(seed_path))
+            with open(os.path.join(seed_path, 'results.pkl'), 'rb') as file:
+                results = pickle.load(file)
+        else:
+            results = method.train(optimizer=optimizer, train_dataset=train_loader, epochs=epochs,
+                                   scheduler=scheduler, early_stopping=early_stopping,
+                                   test_dataset=test_loader, eval_dataset=eval_loader)
 
-        tot_params = 0
-        for i in tqdm(range(len(models)), desc='Training models'):
-            model = models[i]
-            model_params = sum(module.weight.numel() for name, module in model.named_modules()
-                               if hasattr(module, 'weight'))
-            tot_params += model_params
-            # print(complete_model_params, model_params, complete_model_params / model_params,
-            #       1 - (model_params / complete_model_params))
+            if to_save:
+                method.save(seed_path)
+                with open(os.path.join(seed_path, 'results.pkl'), 'wb') as file:
+                    pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
 
-            early_stopping.reset()
-            optim = optimizer(model.parameters())
+        logger.info('Ensemble score on train: {}'.format(eval_method(method, dataset=train_loader)))
+        logger.info('Ensemble score on eval: {}'.format(eval_method(method, dataset=eval_loader)))
+        logger.info('Ensemble score on test: {}'.format(eval_method(method, dataset=test_loader)))
 
-            train_scheduler = scheduler(optim)
+        params = 0
+        if hasattr(method, 'models'):
+            models = method.models
+        else:
+            models = [method.model]
 
-            best_model, scores, best_model_scores = train_model(model=model, optimizer=optim, train_loader=train_loader,
-                                                                epochs=epochs,
-                                                                scheduler=train_scheduler,
-                                                                early_stopping=early_stopping,
-                                                                test_loader=test_loader, eval_loader=eval_loader,
-                                                                device=device)
+        for i in models:
+            for n, p in i.named_parameters():
+                if p.requires_grad:
+                    params += p.numel()
 
-            model.load_state_dict(best_model)
-            logger.info('Best model #{} scores:\nTrain {}, Eval: {}, Test: {}'.format(i, best_model_scores[0],
-                                                                                      best_model_scores[1],
-                                                                                      best_model_scores[2]))
-
-            # past_models = models[:i]
-            # print(len(models[:i]))
-            # model = [m] +
-
-        logger.info('Ensemble score on train: {}'.format(eval_models(models, dataset=train_loader, device=device)))
-        logger.info('Ensemble score on eval: {}'.format(eval_models(models, dataset=eval_loader, device=device)))
-        logger.info('Ensemble score on test: {}'.format(eval_models(models, dataset=test_loader, device=device)))
-        logger.info('Total number of parameters: {}'.format(tot_params))
+        logger.info('Method {} hase {} parameters'.format(method_name, params))

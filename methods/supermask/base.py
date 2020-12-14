@@ -79,8 +79,6 @@ class EnsembleMaskedWrapper(nn.Module):
     def mask(self):
 
         if not self.apply_mask:
-            # if len(self.masks) > 0:
-            #     return self.masks[-1]
             return 1
 
         # if self._eval_mask is not None:
@@ -88,7 +86,7 @@ class EnsembleMaskedWrapper(nn.Module):
 
         if self._current_distribution < 0:
             masks = [d(reduce=True) for d in self._distributions]
-            m = sum(masks)
+            m = torch.mean(torch.stack(masks), 0)
         else:
             m = self._distributions[self._current_distribution](reduce=True)
 
@@ -134,7 +132,7 @@ class EnsembleMaskedWrapper(nn.Module):
     def __repr__(self):
         return 'Supermask {} layer with distribution {}. ' \
                'Original layer: {} '.format('structured' if self.where != 'weights' else 'unstructured',
-                                            self.distribution, self.layer.__repr__())
+                                            self.distributions, self.layer.__repr__())
 
 
 @torch.no_grad()

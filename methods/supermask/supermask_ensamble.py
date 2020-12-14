@@ -13,7 +13,7 @@ import seaborn as sns
 
 def EnsembleSupermaskBeforeTraining(model, train_dataset, test_dataset, mask_epochs, prune_percentage, ensemble=1,
                                     re_init=True, global_pruning=True, device='cpu', eval_dataset=None, supermask=None,
-                                    **kwargs):
+                                    optimizer=None, **kwargs):
 
     logger = logging.getLogger(__name__ + '.' + EnsembleSupermaskBeforeTraining.__name__)
     logger.info('Applying the weights to the model')
@@ -61,7 +61,9 @@ def EnsembleSupermaskBeforeTraining(model, train_dataset, test_dataset, mask_epo
     #             ax.set_ylim(0, 1)
     #             # break
 
-    masks_parameters = [param for name, param in model.named_parameters() if 'distribution' in name]
+    # masks_parameters = [param for name, param in model.named_parameters() if 'distribution' in name]
+    masks_parameters = [param for name, param in model.named_parameters() if param.requires_grad]
+
     optim = torch.optim.Adam(masks_parameters, lr=0.001)
     # optim = optimizer(masks_parameters)
 
