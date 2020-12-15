@@ -1,0 +1,9 @@
+dataset: flat_mnist
+model: lenet-300-100
+epochs: 32
+batch_size: 31
+eval: 0.1
+experiments: 1
+early_stopping:
+  tolerance: 10
+  value: eval
