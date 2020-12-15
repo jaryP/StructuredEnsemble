@@ -111,8 +111,7 @@ def get_dataset(name):
         input_size = 1
 
     elif name == 'flat_mnist':
-        t = torchvision.transforms.Compose([torchvision.transforms.Resize((32, 32)),
-                                            torchvision.transforms.ToTensor(),
+        t = torchvision.transforms.Compose([torchvision.transforms.ToTensor(),
                                             torchvision.transforms.Normalize((0.1307,), (0.3081,)),
                                             torch.nn.Flatten(0)
                                             ])

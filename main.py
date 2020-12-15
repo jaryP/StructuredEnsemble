@@ -5,9 +5,11 @@ import sys
 import numpy as np
 import torch
 
+from calibration import ece_score
 from eval import eval_method
 from methods import SingleModel, Naive
-from methods.supermask.supermask_class import SuperMask
+from methods.batch_ensemble.batch_ensemble import BatchEnsemble
+from methods.supermask.supermask import SuperMask, BatchSuperMask, ReverseSuperMask
 from utils import get_optimizer, get_dataset, get_model, EarlyStopping, ensures_path
 import yaml
 import logging
@@ -66,6 +68,7 @@ for experiment in sys.argv[1:]:
     experiments = trainer.get('experiments', 1)
 
     train, test, input_size, classes = get_dataset(trainer['dataset'])
+
     train_loader = torch.utils.data.DataLoader(dataset=train, batch_size=batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(dataset=test, batch_size=batch_size, shuffle=False)
     eval_loader = None
@@ -121,14 +124,23 @@ for experiment in sys.argv[1:]:
         elif method_name == 'naive':
             method = Naive(model=model, device=device, method_parameters=method_parameters)
         elif method_name == 'supermask':
-            method = SuperMask(model=model, method_parameters=method_parameters)
+            method = SuperMask(model=model, method_parameters=method_parameters, device=device)
+        elif method_name == 'batch_ensemble':
+            method = BatchEnsemble(model=model, method_parameters=method_parameters, device=device)
+        elif method_name == 'batch_supermask':
+            method = BatchSuperMask(model=model, method_parameters=method_parameters, device=device)
+        elif method_name == 'reverse_supermask':
+            method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
         else:
             assert False
+
+        logger.info('Method used: {}'.format(method_name))
 
         if to_load and os.path.exists(os.path.join(seed_path, 'results.pkl')):
             method.load(os.path.join(seed_path))
             with open(os.path.join(seed_path, 'results.pkl'), 'rb') as file:
                 results = pickle.load(file)
+            logger.info('Results and models loaded.')
         else:
             results = method.train(optimizer=optimizer, train_dataset=train_loader, epochs=epochs,
                                    scheduler=scheduler, early_stopping=early_stopping,
@@ -138,6 +150,7 @@ for experiment in sys.argv[1:]:
                 method.save(seed_path)
                 with open(os.path.join(seed_path, 'results.pkl'), 'wb') as file:
                     pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
+                logger.info('Results and models saved.')
 
         logger.info('Ensemble score on train: {}'.format(eval_method(method, dataset=train_loader)))
         logger.info('Ensemble score on eval: {}'.format(eval_method(method, dataset=eval_loader)))
@@ -154,4 +167,8 @@ for experiment in sys.argv[1:]:
                 if p.requires_grad:
                     params += p.numel()
 
-        logger.info('Method {} hase {} parameters'.format(method_name, params))
+        logger.info('Method {} has {} parameters'.format(method_name, params))
+
+        ece, _, _, _ = ece_score(method, test_loader)
+
+        logger.info('Ece score: {}'.format(ece))

@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 
+@torch.no_grad()
 def eval_model(model, dataset, topk=None, device='cpu'):
     model.eval()
     predictions = []
@@ -27,6 +28,7 @@ def eval_model(model, dataset, topk=None, device='cpu'):
     return accuracies
 
 
+@torch.no_grad()
 def eval_method(method, dataset, topk=None):
     predictions = []
     true = []
@@ -47,6 +49,26 @@ def eval_method(method, dataset, topk=None):
 
     return accuracies
 
+
+@torch.no_grad()
+def get_predictions(method, dataset):
+
+    probs = []
+    predictions = []
+    true = []
+
+    for x, y in dataset:
+        true.extend(y.tolist())
+        p = method.predict_proba(x, y)
+        probs.extend(p.tolist())
+        pred = torch.argmax(p, -1)
+        predictions.extend(pred.tolist())
+
+    predictions = np.asarray(predictions)
+    true = np.asarray(true)
+    probs = np.asarray(probs)
+
+    return true, predictions, probs
 
 # def eval_models(model, dataset, topk=None, device='cpu'):
 #     if not isinstance(model, list):
