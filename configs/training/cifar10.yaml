@@ -1,6 +1,6 @@
 dataset: cifar10
 model: vgg11
-epochs: 50
+epochs: 150
 batch_size: 64
 eval: 0.1
 experiments: 1

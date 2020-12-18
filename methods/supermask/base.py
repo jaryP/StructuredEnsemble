@@ -1,3 +1,4 @@
+from collections import defaultdict
 from copy import deepcopy
 
 import numpy as np
@@ -6,11 +7,12 @@ from torch import nn as nn
 from torchvision.models import VGG
 from tqdm import tqdm
 
+from eval import eval_model
 from .layers import EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper
 from .trainable_masks import MMD
 
 
-def mask_training(model, epochs, dataset, ensemble, device='cpu', parameters=None):
+def mask_training(model, epochs, dataset, ensemble, device='cpu', parameters=None, w=1):
     model.to(device)
 
     bar = tqdm(range(epochs), desc='Mask: {}'.format('Mask training'), leave=False)
@@ -30,24 +32,31 @@ def mask_training(model, epochs, dataset, ensemble, device='cpu', parameters=Non
             loss = torch.nn.functional.cross_entropy(pred, y, reduction='mean')
 
             kl = torch.tensor(0.0, device=device)
+            entropy = torch.tensor(0.0, device=device)
+
+            div = 0
 
             if ensemble > 1:
                 for name, module in model.named_modules():
                     if isinstance(module, (EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper)):
                         distr = module.distributions
                         _mmd = torch.tensor(0.0, device=device)
+                        div += len(distr)
                         for i, d1 in enumerate(distr):
                             for j in range(i + 1, len(distr)):
                                 _mmd += MMD(d1, distr[j])
-
+                                e = d1.posterior.entropy()
+                                entropy += e.mean()
                         kl += _mmd
 
-                kl = 1 / (kl + 1e-6)
-                kl *= 1e-2
+                kl = kl / div
+                kl = 1 / kl
+                kl *= w
+                entropy = entropy / div
 
-            losses.append((loss.item(), kl.item()))
+            losses.append((loss.item(), kl.item(), entropy.item()))
 
-            loss += kl
+            loss += kl + entropy
 
             optim.zero_grad()
             loss.backward()
@@ -56,17 +65,111 @@ def mask_training(model, epochs, dataset, ensemble, device='cpu', parameters=Non
         bar.set_postfix({'losses': np.mean(losses, 0)})
 
 
+def iterative_mask_training(model, epochs, dataset, ensemble, device='cpu', parameters=None, w=1,
+                            divergence_type='global_mmd'):
+
+    def divergence(current_ens):
+        d = torch.tensor(0.0, device=device)
+        all_distrs = defaultdict(list)
+
+        for name, module in model.named_modules():
+            if isinstance(module, (EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper)):
+                distr = module.distributions
+                d1 = distr[current_ens]
+                if divergence_type == 'mmd':
+                    for j in range(current_ens):
+                        d += MMD(d1, distr[j])
+                elif divergence_type == 'global_mmd':
+                    all_distrs[current_ens].append(d1().squeeze())
+                    for j in range(current_ens):
+                        all_distrs[j].append(distr[j]().squeeze())
+                else:
+                    assert False
+
+            # all_distrs = defaultdict(list)
+            # for name, module in model.named_modules():
+            #     if isinstance(module, (EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper)):
+            #         distr = module.distributions
+            #         all_distrs[current_ens].append(distr[current_ens]().squeeze())
+            #         for j in range(current_ens):
+            #             all_distrs[j].append(distr[j]().squeeze())
+
+        if divergence_type == 'global_mmd':
+            all_distrs = {k: torch.cat(v, 0) for k, v in all_distrs.items()}
+            current_d = all_distrs[current_ens]
+            for k, v in all_distrs.items():
+                if k == current_ens:
+                    continue
+                d += MMD(current_d, v)
+
+        return d
+
+    model.to(device)
+
+    distributions = dict()
+
+    for name, module in model.named_modules():
+        if isinstance(module, EnsembleMaskedWrapper):
+            distr = module.distributions
+            distributions[name] = distr
+
+    for ens in tqdm(range(ensemble)):
+        if parameters is None:
+            pp = [param for name, param in model.named_parameters() if 'distributions.{}'.format(ens) in name]
+        else:
+            pp = parameters
+
+        optim = torch.optim.Adam(pp, lr=0.001)
+
+        for name, module in model.named_modules():
+            if isinstance(module, EnsembleMaskedWrapper):
+                module.set_distribution(ens)
+
+        bar = tqdm(range(epochs), desc='Mask training', leave=False)
+
+        for _ in bar:
+            losses = []
+            model.train()
+
+            for i, (x, y) in enumerate(dataset):
+                x, y = x.to(device), y.to(device)
+                pred = model(x)
+                loss = torch.nn.functional.cross_entropy(pred, y, reduction='mean')
+
+                kl = torch.tensor(0.0, device=device)
+
+                if ens > 0:
+                    kl = divergence(ens)
+                    kl = 1 / (kl + 1e-12)
+                    kl *= w
+
+                losses.append((loss.item(), kl.item()))
+
+                loss += kl
+
+                optim.zero_grad()
+                loss.backward(retain_graph=True)
+                optim.step()
+
+            bar.set_postfix({'losses': np.mean(losses, 0)})
+
+
 @torch.no_grad()
 def get_mask(module, prune_percentage, distribution=-1, threshold=None):
 
     assert isinstance(module, EnsembleMaskedWrapper)
 
     module.set_distribution(distribution)
+    _mask = module.mask
+
     if threshold is None:
-        threshold = torch.quantile(module.mask, q=prune_percentage)
-    mask = torch.ge(module.mask, threshold).float()
+        threshold = torch.quantile(_mask, q=prune_percentage)
+    mask = torch.ge(_mask, threshold).float()
+
     if mask.sum() == 0:
-        mask = torch.ge(module.mask, threshold / 2).float()
+        max = torch.argmax(_mask)
+        mask = torch.zeros_like(mask)
+        mask[0, max] = 1.0
 
     return mask
 
@@ -74,8 +177,8 @@ def get_mask(module, prune_percentage, distribution=-1, threshold=None):
 @torch.no_grad()
 def register_masks(model, prune_percentage, distribution=-1, global_pruning=False):
     masks = {}
-    threshold = None
 
+    threshold = None
     if global_pruning:
         _masks = []
         for name, module in model.named_modules():
@@ -97,17 +200,17 @@ def register_masks(model, prune_percentage, distribution=-1, global_pruning=Fals
 
 def extract_distribution_subnetwork(model, prune_percentage, distribution, re_init=True, global_pruning=False):
     m = deepcopy(model)
-    _ = register_masks(m, prune_percentage, distribution, global_pruning=global_pruning)
+    masks = register_masks(m, prune_percentage, distribution, global_pruning=global_pruning)
     masked_to_layer(m)
     extract_structured(m, re_init=re_init)
 
-    return m
+    return m, masks
 
 
-def layer_to_masked(module, masks_params=None, ensemble=1, batch_ensamble=False):
+def layer_to_masked(module, masks_params=None, ensemble=1, batch_ensemble=False, single_distribution=False):
     where = 'output'
 
-    if batch_ensamble:
+    if batch_ensemble:
         wrapper = BatchEnsembleMaskedWrapper
     else:
         wrapper = EnsembleMaskedWrapper
@@ -117,7 +220,8 @@ def layer_to_masked(module, masks_params=None, ensemble=1, batch_ensamble=False)
             if isinstance(l, (nn.Linear, nn.Conv2d)):
                 if skip_last and i == len(s) - 1:
                     continue
-                s[i] = wrapper(l, where=where, masks_params=masks_params, ensemble=ensemble)
+                s[i] = wrapper(l, where=where, masks_params=masks_params,
+                               ensemble=ensemble, single_distribution=single_distribution)
 
     spl = True  # if structured else False
     if isinstance(module, nn.Sequential):
@@ -129,19 +233,21 @@ def layer_to_masked(module, masks_params=None, ensemble=1, batch_ensamble=False)
         assert False
 
 
-def masked_to_layer(module):
+def masked_to_layer(model):
     def remove_masked_layer(s):
         for i, l in enumerate(s):
             if isinstance(l, (EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper)):
                 s[i] = l.layer
 
-    if isinstance(module, nn.Sequential):
-        remove_masked_layer(module)
-    elif isinstance(module, VGG):
-        remove_masked_layer(module.features)
-        remove_masked_layer(module.classifier)
+    if isinstance(model, nn.Sequential):
+        remove_masked_layer(model)
+    elif isinstance(model, VGG):
+        remove_masked_layer(model.features)
+        remove_masked_layer(model.classifier)
     else:
         assert False
+
+    return model
 
 
 def extract_structured(model, re_init=False):
@@ -178,6 +284,7 @@ def extract_structured(model, re_init=False):
                     mask_index = m.mask.nonzero(as_tuple=True)[0]
                     weight = torch.index_select(weight, 0, mask_index)
                     last_mask_index = mask_index
+
                 module[i] = create_layer(m, weight)
 
         return last_mask_index
@@ -195,28 +302,3 @@ def extract_structured(model, re_init=False):
         assert False
 
     return model
-    optim = optimizer(model.parameters())
-
-    train_scheduler = scheduler(optim)
-
-    model.train()
-
-    for e in tqdm(range(epochs)):
-        model.train()
-        losses = []
-        for i, (x, y) in enumerate(train_loader):
-            x, y = x.to(device), y.to(device)
-            pred = model(x)
-            loss = nn.functional.cross_entropy(pred, y, reduction='none')
-            losses.extend(loss.tolist())
-            loss = loss.mean()
-            optim.zero_grad()
-            loss.backward()
-            optim.step()
-
-        if eval_loader is not None:
-            eval_scores = eval_model(model, eval_loader, device=device, topk=[1, 5])
-        else:
-            eval_scores = 0
-
-        losses = sum(losses) / len(losses)

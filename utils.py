@@ -199,10 +199,19 @@ def get_optimizer(optimizer: str, lr: float, momentum: float = 0, l1: float = 0,
     return opt, l1loss, scheduler
 
 
+def calculate_trainable_parameters(model):
+    params = 0
+    for n, p in model.named_parameters():
+        if p.requires_grad:
+            params += p.numel()
+    return params
+
+
 def train_model(model, optimizer, train_loader, epochs, scheduler, early_stopping=None,
                 test_loader=None, eval_loader=None, device='cpu'):
 
     scores = []
+    mean_losses = []
 
     best_model = model.state_dict()
     best_model_i = 0
@@ -212,7 +221,8 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
         early_stopping.reset()
 
     model.train()
-    for epoch in tqdm(range(epochs), leave=False):
+    bar = tqdm(range(epochs), leave=True)
+    for epoch in bar:
         model.train()
         losses = []
         for i, (x, y) in enumerate(train_loader):
@@ -231,14 +241,15 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
                 scheduler.step()
 
         if eval_loader is not None:
-            eval_scores = eval_model(model, eval_loader, topk=[1, 5], device=device)
+            eval_scores, _ = eval_model(model, eval_loader, topk=[1, 5], device=device)
         else:
             eval_scores = 0
 
-        losses = sum(losses) / len(losses)
+        mean_loss = sum(losses) / len(losses)
+        mean_losses.append(mean_loss)
 
         if early_stopping is not None:
-            r = early_stopping.step(eval_scores[1]) if eval_loader is not None else early_stopping.step(losses)
+            r = early_stopping.step(eval_scores[1]) if eval_loader is not None else early_stopping.step(mean_loss)
 
             if r < 0:
                 break
@@ -246,9 +257,11 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
                 best_model = model.state_dict()
                 best_model_i = epoch
 
-        train_scores = eval_model(model, train_loader, device=device)
-        test_scores = eval_model(model, test_loader, device=device)
+        train_scores, _ = eval_model(model, train_loader, device=device)
+        test_scores, _ = eval_model(model, test_loader, device=device)
 
+        bar.set_postfix({'Train score': train_scores[1], 'Test score': test_scores[1],
+                         'Eval score': eval_scores[1] if eval_scores != 0 else 0, 'Mean loss': mean_loss})
         scores.append((train_scores, eval_scores, test_scores))
 
-    return best_model, scores, scores[best_model_i]
+    return best_model, scores, scores[best_model_i], mean_losses

@@ -9,17 +9,18 @@ from calibration import ece_score
 from eval import eval_method
 from methods import SingleModel, Naive
 from methods.batch_ensemble.batch_ensemble import BatchEnsemble
-from methods.supermask.supermask import SuperMask, BatchSuperMask, ReverseSuperMask
-from utils import get_optimizer, get_dataset, get_model, EarlyStopping, ensures_path
+from methods.supermask.supermask import SuperMask, GradSuperMask
+from methods.supermask.wip_supermask import ReverseSuperMask, BatchSuperMask
+from utils import get_optimizer, get_dataset, get_model, EarlyStopping, ensures_path, calculate_trainable_parameters
 import yaml
 import logging
 
-#TODO: implementare stampa dei risultati nel file di log
-#TODO: implementare ECE sscore (calibrazione)
-#TODO: implemetare attacco
-#TODO: implementare conteggio parametri
+# TODO: implementare stampa dei risultati nel file di log
+# TODO: implementare ECE sscore (calibrazione)
+# TODO: implemetare attacco
+# TODO: implementare conteggio parametri
 
-#TODO: implementare linear layers BE
+# TODO: implementare linear layers BE
 
 for experiment in sys.argv[1:]:
 
@@ -96,7 +97,7 @@ for experiment in sys.argv[1:]:
 
         logger.info('Config file \n{}'.format(yaml.dump(config_info, allow_unicode=True, default_flow_style=False)))
 
-        logger.info('Experiment {}/{}'.format(experiment_seed, experiments))
+        logger.info('Experiment {}/{}'.format(experiment_seed+1, experiments))
 
         if eval_percentage is not None and eval_percentage > 0:
             assert eval_percentage < 1
@@ -118,6 +119,8 @@ for experiment in sys.argv[1:]:
 
         model = get_model(name=trainer['model'], input_size=input_size, output=classes)
 
+        logger.info('Base model parameters: {}'.format(calculate_trainable_parameters(model)))
+
         if method_name is None or method_name == 'normal':
             method_name = 'normal'
             method = SingleModel(model=model, device=device)
@@ -131,6 +134,8 @@ for experiment in sys.argv[1:]:
             method = BatchSuperMask(model=model, method_parameters=method_parameters, device=device)
         elif method_name == 'reverse_supermask':
             method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
+        elif method_name == 'grad_supermask':
+            method = GradSuperMask(model=model, method_parameters=method_parameters, device=device)
         else:
             assert False
 
@@ -142,9 +147,9 @@ for experiment in sys.argv[1:]:
                 results = pickle.load(file)
             logger.info('Results and models loaded.')
         else:
-            results = method.train(optimizer=optimizer, train_dataset=train_loader, epochs=epochs,
-                                   scheduler=scheduler, early_stopping=early_stopping,
-                                   test_dataset=test_loader, eval_dataset=eval_loader)
+            results = method.train_models(optimizer=optimizer, train_dataset=train_loader, epochs=epochs,
+                                          scheduler=scheduler, early_stopping=early_stopping,
+                                          test_dataset=test_loader, eval_dataset=eval_loader)
 
             if to_save:
                 method.save(seed_path)
@@ -152,9 +157,9 @@ for experiment in sys.argv[1:]:
                     pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
                 logger.info('Results and models saved.')
 
-        logger.info('Ensemble score on train: {}'.format(eval_method(method, dataset=train_loader)))
-        logger.info('Ensemble score on eval: {}'.format(eval_method(method, dataset=eval_loader)))
-        logger.info('Ensemble score on test: {}'.format(eval_method(method, dataset=test_loader)))
+        logger.info('Ensemble score on train: {}'.format(eval_method(method, dataset=train_loader)[0]))
+        logger.info('Ensemble score on eval: {}'.format(eval_method(method, dataset=eval_loader)[0]))
+        logger.info('Ensemble score on test: {}'.format(eval_method(method, dataset=test_loader)[0]))
 
         params = 0
         if hasattr(method, 'models'):
@@ -162,10 +167,8 @@ for experiment in sys.argv[1:]:
         else:
             models = [method.model]
 
-        for i in models:
-            for n, p in i.named_parameters():
-                if p.requires_grad:
-                    params += p.numel()
+        for m in models:
+            params += calculate_trainable_parameters(m)
 
         logger.info('Method {} has {} parameters'.format(method_name, params))
 

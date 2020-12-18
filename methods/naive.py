@@ -25,7 +25,7 @@ class Naive(EnsembleMethod):
                     module.reset_parameters()
             self.models.append(model)
 
-    def train(self, epochs, train_dataset, eval_dataset, test_dataset, optimizer, scheduler=None,
+    def train_models(self, epochs, train_dataset, eval_dataset, test_dataset, optimizer, scheduler=None,
               regularization=None, early_stopping=None,
               **kwargs):
 
@@ -35,7 +35,7 @@ class Naive(EnsembleMethod):
             optim = optimizer([param for name, param in model.named_parameters() if param.requires_grad])
             train_scheduler = scheduler(optim)
 
-            best_model, scores, best_model_scores = train_model(model=model, optimizer=optim,
+            best_model, scores, best_model_scores, losses = train_model(model=model, optimizer=optim,
                                                                 epochs=epochs, train_loader=train_dataset,
                                                                 scheduler=train_scheduler,
                                                                 early_stopping=early_stopping,
@@ -56,7 +56,6 @@ class Naive(EnsembleMethod):
         return outputs
 
     def load(self, path):
-        self.models = []
         for i in range(self.ensemble):
             state_dict = torch.load(os.path.join(path, 'model_{}.pt'.format(i)), map_location=self.device)
             m = deepcopy(self.model)

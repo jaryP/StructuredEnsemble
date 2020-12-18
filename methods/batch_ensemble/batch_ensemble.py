@@ -23,7 +23,7 @@ class BatchEnsemble(EnsembleMethod):
         self.model = deepcopy(model)
         layer_to_masked(self.model, ensemble=self.ensemble)
 
-    def train(self, epochs, train_dataset, eval_dataset, test_dataset, optimizer, scheduler=None,
+    def train_models(self, epochs, train_dataset, eval_dataset, test_dataset, optimizer, scheduler=None,
               regularization=None, early_stopping=None,
               **kwargs):
 
@@ -36,7 +36,7 @@ class BatchEnsemble(EnsembleMethod):
                           .format(train_dataset.batch_size, self.ensemble,
                                   train_dataset.batch_size % self.ensemble))
 
-        best_model, scores, best_model_scores = train_model(model=self.model, optimizer=optim,
+        best_model, scores, best_model_scores, losses = train_model(model=self.model, optimizer=optim,
                                                             epochs=epochs, train_loader=train_dataset,
                                                             scheduler=train_scheduler,
                                                             early_stopping=early_stopping,

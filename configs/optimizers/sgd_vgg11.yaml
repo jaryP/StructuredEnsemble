@@ -1,10 +1,10 @@
 lr: 0.01
 l1: 0
-l2: 0
+l2: 0.0001
 optimizer: sgd
 momentum: 0.9
 annealing:
   type: step
-  step_size: 25
+  step_size: 50
   gamma: 0.5
   verbose: No

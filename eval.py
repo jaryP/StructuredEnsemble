@@ -7,13 +7,19 @@ import torch
 @torch.no_grad()
 def eval_model(model, dataset, topk=None, device='cpu'):
     model.eval()
+
     predictions = []
     true = []
+    losses = []
 
     for x, y in dataset:
         true.extend(y.tolist())
         x, y = x.to(device), y.to(device)
         outputs = model(x)
+
+        loss = torch.nn.functional.cross_entropy(outputs, y, reduction='none')
+        losses.extend(loss.tolist())
+
         top_classes = torch.topk(outputs, outputs.size(-1))[1]
         predictions.extend(top_classes.tolist())
 
@@ -25,17 +31,25 @@ def eval_model(model, dataset, topk=None, device='cpu'):
     # cm = confusion_matrix(true, predictions)
     # TODO: aggiungere calcolo f1 score
 
-    return accuracies
+    return accuracies, np.mean(losses)
 
 
 @torch.no_grad()
 def eval_method(method, dataset, topk=None):
     predictions = []
     true = []
+    losses = []
+
+    method.eval()
 
     for x, y in dataset:
         true.extend(y.tolist())
-        preds = method.predict_proba(x, y)
+        preds, logits = method.predict_proba(x, y, reduce=True)
+
+        loss = torch.nn.functional.cross_entropy(logits.cpu(), y, reduction='none')
+        losses.extend(loss.tolist())
+
+        # preds = method.predict_proba(x, y)
         top_classes = torch.topk(preds, preds.shape[-1])[1]
         predictions.extend(top_classes.tolist())
 
@@ -47,7 +61,7 @@ def eval_method(method, dataset, topk=None):
     # cm = confusion_matrix(true, predictions)
     # TODO: aggiungere calcolo f1 score
 
-    return accuracies
+    return accuracies, np.mean(losses)
 
 
 @torch.no_grad()
@@ -56,10 +70,11 @@ def get_predictions(method, dataset):
     probs = []
     predictions = []
     true = []
+    method.eval()
 
     for x, y in dataset:
         true.extend(y.tolist())
-        p = method.predict_proba(x, y)
+        p, _ = method.predict_proba(x, y, True)
         probs.extend(p.tolist())
         pred = torch.argmax(p, -1)
         predictions.extend(pred.tolist())
