@@ -9,7 +9,7 @@ from calibration import ece_score
 from eval import eval_method
 from methods import SingleModel, Naive
 from methods.batch_ensemble.batch_ensemble import BatchEnsemble
-from methods.supermask.supermask import SuperMask, GradSuperMask
+from methods.supermask.supermask import SuperMask, GradSuperMask, TreeSuperMask
 from methods.supermask.wip_supermask import ReverseSuperMask, BatchSuperMask
 from utils import get_optimizer, get_dataset, get_model, EarlyStopping, ensures_path, calculate_trainable_parameters
 import yaml
@@ -136,6 +136,8 @@ for experiment in sys.argv[1:]:
             method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
         elif method_name == 'grad_supermask':
             method = GradSuperMask(model=model, method_parameters=method_parameters, device=device)
+        elif method_name == 'tree_supermask':
+            method = TreeSuperMask(model=model, method_parameters=method_parameters, device=device)
         else:
             assert False
 

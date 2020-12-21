@@ -47,12 +47,11 @@ class Naive(EnsembleMethod):
 
         return all_scores
 
-    def predict_proba(self, x, y, **kwargs):
+    def predict_logits(self, x, y, reduce):
         x, y = x.to(self.device), y.to(self.device)
         outputs = torch.stack([m(x) for m in self.models])
-        outputs = torch.mean(outputs, 0)
-        outputs = torch.nn.functional.softmax(outputs, -1)
-
+        if reduce:
+            outputs = torch.mean(outputs, 0)
         return outputs
 
     def load(self, path):

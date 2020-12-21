@@ -47,13 +47,14 @@ class BatchEnsemble(EnsembleMethod):
 
         return [scores]
 
-    def predict_proba(self, x, y, **kwargs):
+    def predict_logits(self, x, y, reduce):
         x, y = x.to(self.device), y.to(self.device)
         bs = x.shape[0]
         x = torch.cat([x for _ in range(self.ensemble)], dim=0)
         outputs = self.model(x)
-        outputs = outputs.view([self.ensemble, bs, -1]).mean(dim=0)
-        outputs = torch.nn.functional.softmax(outputs, -1)
+        outputs = outputs.view([self.ensemble, bs, -1])
+        if reduce:
+            outputs = torch.mean(outputs, 0)
         return outputs
 
     def load(self, path):

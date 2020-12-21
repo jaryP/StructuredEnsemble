@@ -4,6 +4,7 @@ from copy import deepcopy
 import numpy as np
 import torch
 from torch import nn as nn
+from torch.optim.lr_scheduler import StepLR, MultiStepLR
 from torchvision.models import VGG
 from tqdm import tqdm
 
@@ -152,6 +153,105 @@ def iterative_mask_training(model, epochs, dataset, ensemble, device='cpu', para
                 optim.step()
 
             bar.set_postfix({'losses': np.mean(losses, 0)})
+
+
+def be_model_training(model, optimizer, train_loader, epochs, scheduler, early_stopping=None,
+                      test_loader=None, eval_loader=None, device='cpu', w=1):
+
+    def divergence():
+        d = torch.tensor(0.0, device=device)
+
+        for name, module in model.named_modules():
+            if isinstance(module, (EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper)):
+                distr = module.distributions
+                for i, d1 in enumerate(distr):
+                    for j, d2 in enumerate(distr):
+                        if j == i:
+                            continue
+                        d += MMD(d1, d2)
+
+        return d
+
+    model.to(device)
+
+    distributions = dict()
+
+    for name, module in model.named_modules():
+        if isinstance(module, EnsembleMaskedWrapper):
+            distr = module.distributions
+            distributions[name] = distr
+
+    for name, module in model.named_modules():
+        if isinstance(module, EnsembleMaskedWrapper):
+            module.set_distribution('all')
+
+    scores = []
+    mean_losses = []
+
+    best_model = model.state_dict()
+    best_model_i = 0
+    model.to(device)
+
+    if early_stopping is not None:
+        early_stopping.reset()
+
+    model.train()
+    bar = tqdm(range(epochs), leave=True)
+
+    for epoch in bar:
+        model.train()
+        losses = []
+        kl_losses = []
+
+        for i, (x, y) in enumerate(train_loader):
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            loss = torch.nn.functional.cross_entropy(pred, y, reduction='none')
+            losses.extend(loss.tolist())
+            loss = loss.mean()
+
+            kl = divergence()
+            kl = 1 / (kl + 1e-12)
+            kl *= w
+            kl_losses.append(kl.item())
+            loss += kl
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        if scheduler is not None:
+            if isinstance(scheduler, (StepLR, MultiStepLR)):
+                scheduler.step()
+
+        if eval_loader is not None:
+            eval_scores, _ = eval_model(model, eval_loader, topk=[1, 5], device=device)
+        else:
+            eval_scores = 0
+
+        mean_loss = sum(losses) / len(losses)
+        mean_losses.append(mean_loss)
+
+        if early_stopping is not None:
+            r = early_stopping.step(eval_scores[1]) if eval_loader is not None else early_stopping.step(mean_loss)
+
+            if r < 0:
+                break
+            elif r > 0:
+                best_model = model.state_dict()
+                best_model_i = epoch
+
+        train_scores, _ = eval_model(model, train_loader, device=device)
+        test_scores, _ = eval_model(model, test_loader, device=device)
+
+        kl_losses = sum(kl_losses) / len(kl_losses)
+        bar.set_postfix({'Train score': train_scores[1], 'Test score': test_scores[1],
+                         'Eval score': eval_scores[1] if eval_scores != 0 else 0,
+                         'Mean loss': mean_loss, 'Kl loss': kl_losses})
+
+        scores.append((train_scores, eval_scores, test_scores))
+
+    return best_model, scores, scores[best_model_i], mean_losses
 
 
 @torch.no_grad()

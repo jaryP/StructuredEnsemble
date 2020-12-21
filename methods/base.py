@@ -57,12 +57,9 @@ class SingleModel(EnsembleMethod):
         self.model.load_state_dict(best_model)
         return [scores]
 
-    def predict_proba(self, x, y, **kwargs):
+    def predict_logits(self, x, y, reduce):
         x, y = x.to(self.device), y.to(self.device)
-        outputs = self.model(x)
-        outputs = torch.nn.functional.softmax(outputs, -1)
-
-        return outputs
+        return self.model(x)
 
     def load(self, path):
         state_dict = torch.load(os.path.join(path, 'model.pt'), map_location=self.device)

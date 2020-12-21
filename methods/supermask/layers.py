@@ -195,8 +195,14 @@ class BatchEnsembleMaskedWrapper(nn.Module):
                 distribution = TrainableBeta(mask_dim, t=t, initialization=masks_params['initialization'])
             elif masks_params['name'] == 'laplace':
                 distribution = TrainableLaplace(mask_dim, t=t, initialization=masks_params['initialization'])
+            elif masks_params['name'] == 'normal':
+                distribution = TrainableNormal(mask_dim, t=t, initialization=masks_params['initialization'])
             elif masks_params['name'] == 'weights':
                 distribution = TrainableWeights(mask_dim, initialization=masks_params['initialization'])
+            elif masks_params['name'] == 'exponential':
+                distribution = TrainableExponential(mask_dim, t=t, initialization=masks_params['initialization'])
+            elif masks_params['name'] == 'gamma':
+                distribution = TrainableGamma(mask_dim, t=t, initialization=masks_params['initialization'])
             else:
                 assert False
 
@@ -277,9 +283,9 @@ class BatchEnsembleMaskedWrapper(nn.Module):
             rest = batch_size % ensemble
 
             masks = [d(reduce=True) for d in self.distributions]
-            masks = torch.stack(masks, 0)
             self.last_mask = masks
 
+            masks = torch.stack(masks, 0)
             masks = masks.repeat(1, m).view(-1, masks.size(-1))
 
             if self.is_conv:
