@@ -7,10 +7,11 @@ import torch
 
 from calibration import ece_score
 from eval import eval_method
-from methods import SingleModel, Naive
+from methods import SingleModel, Naive, SuperMask
 from methods.batch_ensemble.batch_ensemble import BatchEnsemble
-from methods.supermask.supermask import SuperMask, GradSuperMask, TreeSuperMask
-from methods.supermask.wip_supermask import ReverseSuperMask, BatchSuperMask
+from methods.supermask.supermask import GradSuperMask, BatchPruningSuperMask
+from methods.supermask.wip_supermask import ReverseSuperMask, BatchSuperMask, TreeSuperMask, \
+    ExtremeBatchPruningSuperMask
 from utils import get_optimizer, get_dataset, get_model, EarlyStopping, ensures_path, calculate_trainable_parameters
 import yaml
 import logging
@@ -68,7 +69,7 @@ for experiment in sys.argv[1:]:
     epochs = trainer['epochs']
     experiments = trainer.get('experiments', 1)
 
-    train, test, input_size, classes = get_dataset(trainer['dataset'])
+    train, test, input_size, classes = get_dataset(trainer['dataset'], model_name=trainer['model'])
 
     train_loader = torch.utils.data.DataLoader(dataset=train, batch_size=batch_size, shuffle=True)
     test_loader = torch.utils.data.DataLoader(dataset=test, batch_size=batch_size, shuffle=False)
@@ -131,7 +132,8 @@ for experiment in sys.argv[1:]:
         elif method_name == 'batch_ensemble':
             method = BatchEnsemble(model=model, method_parameters=method_parameters, device=device)
         elif method_name == 'batch_supermask':
-            method = BatchSuperMask(model=model, method_parameters=method_parameters, device=device)
+            method = ExtremeBatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
+            # method = BatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
         elif method_name == 'reverse_supermask':
             method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
         elif method_name == 'grad_supermask':

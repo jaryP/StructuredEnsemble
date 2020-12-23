@@ -2,7 +2,6 @@ from typing import Union
 
 import torch
 from torch import nn as nn
-from torch.nn import Parameter
 
 from methods.supermask.trainable_masks import TrainableBeta, TrainableLaplace, TrainableWeights, TrainableExponential, \
     TrainableGamma, TrainableNormal
@@ -178,7 +177,7 @@ class BatchEnsembleMaskedWrapper(nn.Module):
         where = where.lower()
         if not where == 'weights':
             if where == 'output':
-                mask_dim = (mask_dim[0], )
+                mask_dim = (mask_dim[0],)
                 # mask_dim = (1, mask_dim[0])
             else:
                 assert False, 'The following types are allowed: output, input and weights. {} given'.format(where)
@@ -188,7 +187,7 @@ class BatchEnsembleMaskedWrapper(nn.Module):
 
         self.distributions = nn.ModuleList()
 
-        #TODO: fare in modo che t = n_ensambles
+        # TODO: fare in modo che t = n_ensambles
 
         for i in range(ensemble):
             if masks_params['name'] == 'beta':
@@ -226,23 +225,6 @@ class BatchEnsembleMaskedWrapper(nn.Module):
     def posterior(self):
         return self.distribution.posterior
 
-    # @property
-    # def mask(self):
-    #
-    #     if not self.apply_mask:
-    #         return 1
-    #
-    #     # if self._eval_mask is not None:
-    #     #     return self._eval_mask
-    #
-    #     if self._current_distribution < 0:
-    #         masks = [d(reduce=True) for d in self.distributions]
-    #         m = torch.mean(torch.stack(masks), 0)
-    #     else:
-    #         m = self.distributions[self._current_distribution](reduce=True)
-    #
-    #     return m
-
     def eval(self):
         self._eval_mask = self.mask
         return self.train(False)
@@ -257,7 +239,6 @@ class BatchEnsembleMaskedWrapper(nn.Module):
             return 0
 
         kl = self.distribution.calculate_divergence(prior).sum()
-        # kl = torch.distributions.kl.kl_divergence(self.posterior, prior).sum()
         return kl
 
     def forward(self, x):
@@ -302,3 +283,5 @@ class BatchEnsembleMaskedWrapper(nn.Module):
         return 'Supermask {} layer with distribution {}. ' \
                'Original layer: {} '.format('structured' if self.where != 'weights' else 'unstructured',
                                             self.distributions, self.layer.__repr__())
+
+

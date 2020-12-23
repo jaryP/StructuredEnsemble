@@ -1,5 +1,5 @@
 dataset: cifar10
-model: vgg11
+model: resnet18
 epochs: 100
 batch_size: 64
 eval: 0.1

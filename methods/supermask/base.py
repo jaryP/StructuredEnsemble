@@ -402,3 +402,62 @@ def extract_structured(model, re_init=False):
         assert False
 
     return model
+
+
+def shrink_process():
+    add_wrappers_to_model(m, masks_params=self.supermask_parameters, ensemble=1)
+    mask_training(epochs=self.mask_epochs, model=m, device=self.device,
+                  dataset=train_dataset, ensemble=1)
+
+    grads = defaultdict(list)
+    for i, (x, y) in enumerate(train_dataset):
+        x, y = x.to(self.device), y.to(self.device)
+        pred = m(x)
+        loss = torch.nn.functional.cross_entropy(pred, y, reduction='sum')
+
+        m.zero_grad()
+        loss.backward(retain_graph=True)
+
+        for name, module in m.named_modules():
+            if isinstance(module, EnsembleMaskedWrapper):
+                grad = torch.autograd.grad(loss, module.last_mask, retain_graph=True)
+                assert len(grad) == 1
+                grad = grad[0]
+                grads[name].append(torch.abs(grad).cpu())
+    m.zero_grad()
+    remove_wrappers_from_model(m)
+
+    f = lambda x: torch.mean(x, 0)
+    if self.grad_reduce == 'median':
+        f = lambda x: torch.median(x, 0)
+    elif self.grad_reduce == 'max':
+        f = lambda x: torch.max(x, 0)
+
+    ens_grads = {name: f(torch.stack(gs, 0)).detach().cpu() for name, gs in grads.items()}
+
+    if self.global_pruning:
+        stacked_grads = np.concatenate([gs.view(-1).numpy() for name, gs in ens_grads.items()])
+        grads_sum = np.sum(stacked_grads)
+        stacked_grads = stacked_grads / grads_sum
+
+        threshold = np.quantile(stacked_grads, q=self.prune_percentage)
+
+        masks = {name: torch.ge(gs / grads_sum, threshold).float().to(self.device)
+                 for name, gs in ens_grads.items()}
+    else:
+        masks = {name: torch.ge(gs, torch.quantile(gs, self.prune_percentage)).float()
+                 for name, gs in ens_grads.items()}
+
+    for name, mask in masks.items():
+        mask = mask.squeeze()
+        if mask.sum() == 0:
+            max = torch.argmax(ens_grads[name])
+            mask = torch.zeros_like(mask)
+            mask[max] = 1.0
+        masks[name] = mask
+
+    remove_wrappers_from_model(m)
+    p1 = calculate_trainable_parameters(m)
+    m = extract_inner_model(m, masks, re_init=self.re_init)
+    p2 = calculate_trainable_parameters(m)
+    print(mi, p1, p2)

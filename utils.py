@@ -3,9 +3,10 @@ import os
 import numpy as np
 import torch
 import torchvision
+from torch.nn.modules.batchnorm import _BatchNorm
 from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import StepLR, MultiStepLR
-from torchvision.models import vgg11
+from torchvision.models import vgg11, resnet18
 from torchvision.transforms import transforms
 from tqdm import tqdm
 
@@ -54,13 +55,6 @@ def ensures_path(path):
     return True
 
 
-def save_model():
-    pass
-
-
-def load_model():
-    pass
-
 
 def get_model(name, input_size=None, output=None):
     name = name.lower()
@@ -70,29 +64,47 @@ def get_model(name, input_size=None, output=None):
         return LeNet(input_size, output)
     elif 'vgg' in name:
         # if 'bn' in name:
-
         if name == 'vgg11':
             vgg = vgg11(pretrained=False, num_classes=output)
         else:
             assert False
 
         for n, m in vgg.named_modules():
-            if hasattr(m, 'bias'):
+            if hasattr(m, 'bias') and not isinstance(m, _BatchNorm):
                 if m.bias is not None:
                     if m.bias.sum() == 0:
                         m.bias = None
+
         return vgg
+
+    elif 'resnet' in name:
+        if name == 'resnet18':
+            resnet = resnet18(num_classes=output, pretrained=False)
+        else:
+            assert False
+
+        for n, m in resnet.named_modules():
+            if hasattr(m, 'bias') and not isinstance(m, _BatchNorm):
+                if m.bias is not None:
+                    if m.bias.sum() == 0:
+                        m.bias = None
+
+        return resnet
     else:
         assert False
 
 
-def get_dataset(name):
+def get_dataset(name, model_name):
     if name == 'mnist':
-        t = torchvision.transforms.Compose([torchvision.transforms.Resize((32, 32)),
+        t = [torchvision.transforms.Resize((32, 32)),
                                             torchvision.transforms.ToTensor(),
                                             torchvision.transforms.Normalize((0.1307,), (0.3081,)),
-                                            # nn.Flatten(0)
-                                            ])
+                                            ]
+        if model_name == 'lenet-300-100':
+            t.append(torch.nn.Flatten())
+
+        t = torchvision.transforms.Compose(t)
+
         train_set = torchvision.datasets.MNIST(
             root='./datasets/mnist/',
             train=True,
@@ -134,17 +146,21 @@ def get_dataset(name):
         input_size = 28 * 28
 
     elif name == 'cifar10':
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ])
-
-        train_transform = transforms.Compose([
+        tt = [
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ])
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
+        t = [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
+
+        # if 'resnet' in model_name:
+        #     tt = [transforms.Resize(256), transforms.CenterCrop(224)] + tt
+        #     t = [transforms.Resize(256), transforms.CenterCrop(224)] + t
+
+        transform = transforms.Compose(t)
+        train_transform = transforms.Compose(tt)
 
         train_set = torchvision.datasets.CIFAR10(
             root='./datasets/cifar10', train=True, download=True, transform=train_transform)

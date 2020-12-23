@@ -17,8 +17,9 @@ class Naive(EnsembleMethod):
 
         self.model = model
         self.models = torch.nn.ModuleList()
+        self.ensemble = method_parameters['n_ensemble']
 
-        for i in range(method_parameters['n_ensemble']):
+        for i in range(self.ensemble):
             model = deepcopy(model)
             for name, module in model.named_modules():
                 if hasattr(module, 'reset_parameters'):
@@ -26,8 +27,8 @@ class Naive(EnsembleMethod):
             self.models.append(model)
 
     def train_models(self, epochs, train_dataset, eval_dataset, test_dataset, optimizer, scheduler=None,
-              regularization=None, early_stopping=None,
-              **kwargs):
+                     regularization=None, early_stopping=None,
+                     **kwargs):
 
         all_scores = []
         for i in tqdm(range(len(self.models)), desc='Training models'):
@@ -36,14 +37,18 @@ class Naive(EnsembleMethod):
             train_scheduler = scheduler(optim)
 
             best_model, scores, best_model_scores, losses = train_model(model=model, optimizer=optim,
-                                                                epochs=epochs, train_loader=train_dataset,
-                                                                scheduler=train_scheduler,
-                                                                early_stopping=early_stopping,
-                                                                test_loader=test_dataset, eval_loader=eval_dataset,
-                                                                device=self.device)
+                                                                        epochs=epochs, train_loader=train_dataset,
+                                                                        scheduler=train_scheduler,
+                                                                        early_stopping=early_stopping,
+                                                                        test_loader=test_dataset,
+                                                                        eval_loader=eval_dataset,
+                                                                        device=self.device)
 
             model.load_state_dict(best_model)
+            model.to('cpu')
             all_scores.append(scores)
+
+        self.device = 'cpu'
 
         return all_scores
 
@@ -59,7 +64,7 @@ class Naive(EnsembleMethod):
             state_dict = torch.load(os.path.join(path, 'model_{}.pt'.format(i)), map_location=self.device)
             m = deepcopy(self.model)
             m.load_state_dict(state_dict)
-            m.to(self.device)
+            # m.to(self.device)
             self.models.append(m)
 
     def save(self, path):
