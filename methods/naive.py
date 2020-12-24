@@ -60,6 +60,7 @@ class Naive(EnsembleMethod):
         return outputs
 
     def load(self, path):
+        self.device = 'cpu'
         for i in range(self.ensemble):
             state_dict = torch.load(os.path.join(path, 'model_{}.pt'.format(i)), map_location=self.device)
             m = deepcopy(self.model)

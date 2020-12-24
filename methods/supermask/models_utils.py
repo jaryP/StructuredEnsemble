@@ -35,17 +35,17 @@ def add_wrappers_to_model(module, masks_params=None, ensemble=1, batch_ensemble=
 
     spl = True  # if structured else False
     if isinstance(module, nn.Sequential):
-        apply_mask_sequential(module, skip_last=spl)
+        apply_mask_sequential(module, skip_last=True)
     elif isinstance(module, VGG):
         apply_mask_sequential(module.features, skip_last=False)
-        apply_mask_sequential(module.classifier, skip_last=spl)
+        apply_mask_sequential(module.classifier, skip_last=True)
     elif isinstance(module, ResNet):
         module.conv1 = wrapper(module.conv1, masks_params=masks_params, where='output',
                                ensemble=ensemble, batch_ensemble=batch_ensemble)
         # module.fc = wrapper(module.fc, masks_params=masks_params, where='output',
         #                     ensemble=ensemble, batch_ensemble=batch_ensemble)
         for i in range(1, 5):
-            apply_mask_sequential(getattr(module, 'layer{}'.format(i)), skip_last=False)
+            apply_mask_sequential(getattr(module, 'layer{}'.format(i)), skip_last=True)
     else:
         assert False
 
@@ -144,7 +144,7 @@ def extract_inner_model(model, masks, re_init=False):
 
         return block, input_indexes
 
-    def extract_structured_from_sequential(module, initial_mask=None):
+    def extract_structured_from_sequential(module, initial_mask=None, prefix=''):
         if not isinstance(module, nn.Sequential):
             return module, initial_mask
 
@@ -152,6 +152,7 @@ def extract_inner_model(model, masks, re_init=False):
 
         last_mask_index = initial_mask
         for name, m in module.named_modules():
+            name = prefix+name
             if isinstance(m, nn.Sequential):
                 continue
             if isinstance(m, (nn.Linear, nn.Conv2d)):
@@ -179,19 +180,21 @@ def extract_inner_model(model, masks, re_init=False):
     elif isinstance(model, VGG):
         new_model = deepcopy(model)
 
-        features, last_mask = extract_structured_from_sequential(new_model.features)
+        prefix = 'features.'
+        features, last_mask = extract_structured_from_sequential(new_model.features, prefix='features.')
 
         indexes = torch.arange(0, 512 * 7 * 7, device=last_mask.device, dtype=torch.long)
         indexes = indexes.view((512, 7, 7))
         indexes = torch.index_select(indexes, 0, last_mask)
         last_mask = indexes.view(-1)
 
-        classifier, _ = extract_structured_from_sequential(new_model.classifier, initial_mask=last_mask)
+        classifier, _ = extract_structured_from_sequential(new_model.classifier, initial_mask=last_mask,
+                                                           prefix='classifier.')
 
         new_model.features = features
         new_model.classifier = classifier
 
-    if isinstance(model, ResNet):
+    elif isinstance(model, ResNet):
         new_model = deepcopy(model)
 
         first_mask = masks['conv1']

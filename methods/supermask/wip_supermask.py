@@ -37,7 +37,7 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
         self.global_pruning = method_parameters['global_pruning']
         self.grad_reduce = method_parameters.get('grad_reduce', 'mean')
 
-        self.shrink_iterations = method_parameters.get('shrink_iterations', 1)
+        self.shrink_iterations = method_parameters.get('shrink_iterations', 0)
         self.shrink_pruning = method_parameters.get('shrink_pruning', self.prune_percentage)
 
         self.models = torch.nn.ModuleList()
@@ -48,7 +48,12 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
                      regularization=None, early_stopping=None,
                      **kwargs):
 
-        for i in tqdm(range(self.shrink_iterations + 1), desc='Shrink Iterations'):
+        if self.shrink_iterations == 0:
+            bar = tqdm(range(self.shrink_iterations + 1), desc='Shrink Iterations', disable=True)
+        else:
+            bar = tqdm(range(self.shrink_iterations + 1), desc='Shrink Iterations')
+
+        for i in bar:
             last_iteration = i == self.shrink_iterations
 
             if last_iteration:
@@ -145,9 +150,9 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
                                                                         device=self.device)
 
             model.load_state_dict(best_model)
-
+            model.to('cpu')
             all_scores.append(scores)
-
+        self.device = 'cpu'
         return all_scores
 
     def predict_logits(self, x, y, reduce):
@@ -158,6 +163,7 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
         return outputs
 
     def load(self, path):
+        self.device = 'cpu'
         for i in range(self.ensemble):
             m = torch.load(os.path.join(path, 'model_{}.pt'.format(i)), map_location=self.device)
             m.to(self.device)
