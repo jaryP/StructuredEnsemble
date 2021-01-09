@@ -133,7 +133,7 @@ class EnsembleMaskedWrapper(nn.Module):
             o = nn.functional.conv2d(x, w, self.layer.bias, stride=self.layer.stride, padding=self.layer.padding,
                                      dilation=self.layer.dilation, groups=self.layer.groups)
         else:
-            o = nn.functional.linear(x, w, self.layer.bias)
+            o = nn.functional.fc(x, w, self.layer.bias)
 
         # if self.where == 'output':
         mask = self.mask
@@ -255,7 +255,7 @@ class BatchEnsembleMaskedWrapper(nn.Module):
             o = nn.functional.conv2d(x, w, self.layer.bias, stride=self.layer.stride, padding=self.layer.padding,
                                      dilation=self.layer.dilation, groups=self.layer.groups)
         else:
-            o = nn.functional.linear(x, w, self.layer.bias)
+            o = nn.functional.fc(x, w, self.layer.bias)
 
         if self.where == 'output':
             batch_size = x.size(0)

@@ -6,8 +6,10 @@ import numpy as np
 import seaborn as sns
 import torch
 from matplotlib import pyplot as plt
+from torch.nn.modules.batchnorm import _BatchNorm
 from torch.optim import Adam
 from tqdm import tqdm
+import dill as pickle
 
 from eval import eval_model
 from methods.base import EnsembleMethod
@@ -66,6 +68,13 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
             add_wrappers_to_model(self.model, masks_params=self.supermask_parameters,
                                   ensemble=ens, batch_ensemble=True)
 
+            params = [param for name, param in self.model.named_parameters()
+                          if param.requires_grad and 'distributions' in name]
+
+            for _, module in self.model.named_modules():
+                if isinstance(module, _BatchNorm):
+                    params.extend(module.named_parameters())
+
             optim = Adam([param for name, param in self.model.named_parameters()
                           if param.requires_grad and 'distributions' in name], 0.001)
 
@@ -80,6 +89,12 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
                                                                               eval_loader=eval_dataset,
                                                                               device=self.device, w=self.divergence_w)
             self.model.load_state_dict(best_model)
+
+            for _, module in self.model.named_modules():
+                if isinstance(module, _BatchNorm):
+                    module.reset_parameters()
+
+            print(self.model)
 
             grads = defaultdict(lambda: defaultdict(list))
 
@@ -110,7 +125,7 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
 
             remove_wrappers_from_model(self.model)
 
-            for mi, ens_grads in grads.items():
+            for mi, ens_grads in tqdm(grads.items(), desc='Extracting inner models'):
                 f = lambda x: torch.mean(x, 0)
 
                 if self.grad_reduce == 'median':
@@ -137,6 +152,9 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
 
         for i in tqdm(range(len(self.models)), desc='Training models'):
             model = self.models[i]
+
+            # print(model)
+
             optim = optimizer([param for name, param in model.named_parameters() if param.requires_grad])
 
             train_scheduler = scheduler(optim)
@@ -165,13 +183,17 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
     def load(self, path):
         self.device = 'cpu'
         for i in range(self.ensemble):
-            m = torch.load(os.path.join(path, 'model_{}.pt'.format(i)), map_location=self.device)
+            with open(os.path.join(path, 'model_{}.pt'.format(i)), 'rb') as file:
+                m = pickle.load(file)
+            # m = torch.load(os.path.join(path, 'model_{}.pt'.format(i)), map_location=self.device)
             m.to(self.device)
             self.models.append(m)
 
     def save(self, path):
         for i, m in enumerate(self.models):
-            torch.save(m, os.path.join(path, 'model_{}.pt'.format(i)))
+            with open(os.path.join(path, 'model_{}.pt'.format(i)), 'wb') as file:
+                pickle.dump(m, file)
+            # torch.save(m, os.path.join(path, 'model_{}.pt'.format(i)))
 
 
 class ReverseSuperMask(EnsembleMethod):
@@ -303,7 +325,8 @@ class BatchSuperMask(EnsembleMethod):
                      regularization=None, early_stopping=None,
                      **kwargs):
 
-        layer_to_masked(self.model, masks_params=self.supermask_parameters, ensemble=self.ensemble, batch_ensemble=True)
+        add_wrappers_to_model(self.model, masks_params=self.supermask_parameters,
+                              ensemble=self.ensemble, single_distribution=self.single_distribution)
 
         optim = Adam([param for name, param in self.model.named_parameters()
                       if param.requires_grad and 'distributions' in name], 0.001)

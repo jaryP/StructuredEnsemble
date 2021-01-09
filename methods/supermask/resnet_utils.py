@@ -27,10 +27,15 @@ class ResNetBlockWrapper(nn.Module):
         #                      ensemble=ensemble, t=t)
         self.conv2 = self.block.conv2
 
-        self.downsample = block.downsample
-        if block.downsample is not None:
-            self.downsample[0] = wrapper(self.downsample[0], where='output', masks_params=masks_params,
-                                         ensemble=ensemble)
+        self.shortcut = block.shortcut
+
+        if isinstance(self.shortcut, nn.Sequential):
+            if len(self.shortcut) > 0:
+                # pass
+                # else:
+                # if block.downsample is not None:
+                self.shortcut[0] = wrapper(self.downsample[0], where='output', masks_params=masks_params,
+                                             ensemble=ensemble)
 
     def forward(self, x):
         identity = x
@@ -42,10 +47,10 @@ class ResNetBlockWrapper(nn.Module):
         out = self.conv2(out)
         out = self.block.bn2(out)
 
-        if self.downsample is not None:
-            identity = self.downsample(x)
+        # if self.downsample is not None:
+        #     identity = self.downsample(x)
 
-        out += identity
+        out += self.shortcut(x)
         out = self.relu(out)
 
         return out
@@ -186,16 +191,18 @@ class ResNetBlockWrapper(nn.Module):
 #
 #     return new_model
 
+
 if __name__ == '__main__':
     import torch
+    from models import resnet20, LambdaLayer
 
-    import torchvision.models as models
+    # import torchvision.models as models
     from collections import defaultdict
     from utils import calculate_trainable_parameters
     from methods.supermask.models_utils import remove_wrappers_from_model, get_masks_from_gradients, \
     add_wrappers_to_model, extract_inner_model
 
-    resnet18 = models.resnet18(num_classes=10)
+    resnet18 = resnet20(num_classes=10)
 
     add_wrappers_to_model(resnet18, ensemble=2,
                           masks_params={'name': 'weights', 'initialization': {'name': 'constant', 'c': 1}},
@@ -225,8 +232,11 @@ if __name__ == '__main__':
         # elif isinstance(module, ResNetBlockWrapper):
 
     print(grads[0].keys())
+    print(resnet18)
 
     remove_wrappers_from_model(resnet18)
+
+    # print(resnet18)
 
     # print(resnet18)
     # input()
@@ -240,7 +250,7 @@ if __name__ == '__main__':
 
         ens_grads = {name: f(torch.stack(gs, 0)).detach().cpu() for name, gs in ens_grads.items()}
 
-        masks = get_masks_from_gradients(gradients=ens_grads, prune_percentage=0.5,
+        masks = get_masks_from_gradients(gradients=ens_grads, prune_percentage=0.3,
                                          global_pruning=False)
 
         m = extract_inner_model(resnet18, masks, False)

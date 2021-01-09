@@ -1,10 +1,10 @@
 dataset: cifar10
-model: resnet18
+model: resnet20
 epochs: 150
 batch_size: 128
 eval: 0.1
 experiments: 1
 early_stopping:
-  tolerance: 10
+  tolerance: 50
   value: eval
 

@@ -4,7 +4,7 @@ l2: 0
 optimizer: sgd
 momentum: 0.9
 annealing:
-  type: step
-  step_size: 30
+  type: multi_step
+  milestones: [50, 100, 125]
   gamma: 0.5
   verbose: No

@@ -11,7 +11,7 @@ from torchvision.transforms import transforms
 from tqdm import tqdm
 
 from eval import eval_model
-from models import LeNet, LeNet_300_100
+from models import LeNet, LeNet_300_100, resnet20
 
 
 class EarlyStopping:
@@ -78,8 +78,8 @@ def get_model(name, input_size=None, output=None):
         return vgg
 
     elif 'resnet' in name:
-        if name == 'resnet18':
-            resnet = resnet18(num_classes=output, pretrained=False)
+        if name == 'resnet20':
+            resnet = resnet20(num_classes=output)
         else:
             assert False
 

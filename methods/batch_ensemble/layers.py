@@ -2,6 +2,8 @@ import torch
 from torch import nn
 from torchvision.models import VGG
 
+from models import ResNet
+
 
 def layer_to_masked(module, ensemble=1):
     def apply_mask_sequential(s):
@@ -16,6 +18,11 @@ def layer_to_masked(module, ensemble=1):
     elif isinstance(module, VGG):
         apply_mask_sequential(module.features)
         apply_mask_sequential(module.classifier)
+    elif isinstance(module, ResNet):
+        module.conv1 = BEConv2D(module.conv1, ensemble=ensemble)
+        module.fc = BELinear(module.fc, ensemble=ensemble)
+        for i in range(1, 4):
+            apply_mask_sequential(getattr(module, 'layer{}'.format(i)))
     else:
         assert False
 

@@ -196,7 +196,7 @@ def be_model_training(model, optimizer, train_loader, epochs, scheduler, early_s
         early_stopping.reset()
 
     model.train()
-    bar = tqdm(range(epochs), leave=True)
+    bar = tqdm(range(epochs), leave=True, desc='Mask training')
 
     for epoch in bar:
         model.train()

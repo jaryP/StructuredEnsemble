@@ -16,10 +16,7 @@ from utils import get_optimizer, get_dataset, get_model, EarlyStopping, ensures_
 import yaml
 import logging
 
-# TODO: implementare stampa dei risultati nel file di log
-# TODO: implementare ECE sscore (calibrazione)
 # TODO: implemetare attacco
-# TODO: implementare conteggio parametri
 
 # TODO: implementare linear layers BE
 
