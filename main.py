@@ -5,13 +5,13 @@ import sys
 import numpy as np
 import torch
 
-from calibration import ece_score
+from experiments.calibration import ece_score
 from eval import eval_method
+from experiments.corrupted_cifar import corrupted_cifar_uncertainty
 from methods import SingleModel, Naive, SuperMask
 from methods.batch_ensemble.batch_ensemble import BatchEnsemble
-from methods.supermask.supermask import GradSuperMask, BatchPruningSuperMask
-from methods.supermask.wip_supermask import ReverseSuperMask, BatchSuperMask, TreeSuperMask, \
-    ExtremeBatchPruningSuperMask
+from methods.dropout.dropout import MCDropout
+from methods.supermask.supermask import ExtremeBatchPruningSuperMask
 from utils import get_optimizer, get_dataset, get_model, EarlyStopping, ensures_path, calculate_trainable_parameters
 import yaml
 import logging
@@ -131,12 +131,14 @@ for experiment in sys.argv[1:]:
         elif method_name == 'batch_supermask':
             method = ExtremeBatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
             # method = BatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
-        elif method_name == 'reverse_supermask':
-            method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
-        elif method_name == 'grad_supermask':
-            method = GradSuperMask(model=model, method_parameters=method_parameters, device=device)
-        elif method_name == 'tree_supermask':
-            method = TreeSuperMask(model=model, method_parameters=method_parameters, device=device)
+        # elif method_name == 'reverse_supermask':
+            # method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
+        # elif method_name == 'grad_supermask':
+            # method = GradSuperMask(model=model, method_parameters=method_parameters, device=device)
+        # elif method_name == 'tree_supermask':
+            # method = TreeSuperMask(model=model, method_parameters=method_parameters, device=device)
+        elif method_name == 'mc_dropout':
+            method = MCDropout(model=model, method_parameters=method_parameters, device=device)
         else:
             assert False
 
@@ -158,9 +160,10 @@ for experiment in sys.argv[1:]:
                     pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
                 logger.info('Results and models saved.')
 
-        logger.info('Ensemble score on train: {}'.format(eval_method(method, dataset=train_loader)[0]))
-        logger.info('Ensemble score on eval: {}'.format(eval_method(method, dataset=eval_loader)[0]))
-        logger.info('Ensemble score on test: {}'.format(eval_method(method, dataset=test_loader)[0]))
+        corrupted_cifar_uncertainty(method, batch_size)
+        # logger.info('Ensemble score on train: {}'.format(eval_method(method, dataset=train_loader)[0]))
+        # logger.info('Ensemble score on eval: {}'.format(eval_method(method, dataset=eval_loader)[0]))
+        # logger.info('Ensemble score on test: {}'.format(eval_method(method, dataset=test_loader)[0]))
 
         params = 0
         if hasattr(method, 'models'):

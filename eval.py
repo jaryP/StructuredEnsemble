@@ -85,6 +85,23 @@ def get_predictions(method, dataset):
 
     return true, predictions, probs
 
+
+def get_logits(method, dataset):
+    probs = []
+    true = []
+    method.eval()
+
+    for x, y in dataset:
+        true.extend(y.tolist())
+        p = method.predict_logits(x, y, False)
+        probs.extend(p.tolist())
+
+    true = np.asarray(true)
+    probs = np.stack(probs, 0)
+
+    return probs, true
+
+
 # def eval_models(model, dataset, topk=None, device='cpu'):
 #     if not isinstance(model, list):
 #         model = [model]

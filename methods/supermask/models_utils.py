@@ -44,10 +44,11 @@ def add_wrappers_to_model(module, masks_params=None, ensemble=1, batch_ensemble=
     elif isinstance(module, ResNet):
         module.conv1 = wrapper(module.conv1, masks_params=masks_params, where='output',
                                ensemble=ensemble, batch_ensemble=batch_ensemble)
-        # module.fc = wrapper(module.fc, masks_params=masks_params, where='output',
-        #                     ensemble=ensemble, batch_ensemble=batch_ensemble)
         for i in range(1, 4):
             apply_mask_sequential(getattr(module, 'layer{}'.format(i)), skip_last=True)
+
+        module.fc = wrapper(module.fc, masks_params=masks_params, where='output',
+                            ensemble=ensemble, batch_ensemble=batch_ensemble)
     else:
         assert False
 
@@ -71,7 +72,8 @@ def remove_wrappers_from_model(model):
         remove_masked_layer(model.classifier)
     elif isinstance(model, ResNet):
         model.conv1 = model.conv1.layer
-        # model.fc = model.fc.layer
+        if isinstance(model.fc, (EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper)):
+            model.fc = model.fc.layer
         for i in range(1, 4):
             remove_masked_layer(getattr(model, 'layer{}'.format(i)))
     else:
@@ -107,7 +109,7 @@ def extract_inner_model(model, masks, re_init=False):
 
         return nl
 
-    def create_new_block(block, block_mask, input_indexes):
+    def create_new_block(block, block_mask, input_indexes, output_indexes=None):
 
         hidden_dim, input_dim, _, _ = block.conv1.weight.shape
         output_dim, _, _, _ = block.conv2.weight.shape
@@ -119,12 +121,17 @@ def extract_inner_model(model, masks, re_init=False):
 
         conv2_weight = block.conv2.weight
         conv2_weight = torch.index_select(conv2_weight, 1, conv1_indexes)
+
         if input_indexes is not None:
-            conv2_weight = torch.index_select(conv2_weight, 0, input_indexes)
+            conv2_weight = torch.index_select(conv2_weight, 1, input_indexes)
+
+        if output_indexes is not None:
+            print(conv2_weight.shape, len(output_indexes))
+            conv2_weight = torch.index_select(conv2_weight, 0, output_indexes)
 
         new_hidden_dim, new_input_dim, _, _ = conv1_weight.shape
         new_output_dim, _, _, _ = conv2_weight.shape
-        
+
         new_block = BasicBlock(in_planes=new_input_dim, planes=new_output_dim, hidden_planes=new_hidden_dim,
                                stride=block.stride)
         if not re_init:
@@ -133,57 +140,56 @@ def extract_inner_model(model, masks, re_init=False):
 
         return new_block, input_indexes
 
-    def extract_structured_from_block(block, block_masks, input_indexes):
-
-        # extract the weights based on the input dimension (using the associated mask)
-        weight = block.conv1.weight
-        weight = torch.index_select(weight, 1, input_indexes)
-        weight, conv1_indexes = extract_weights(weight, block_masks['conv1'])
-        block.conv1 = create_layer(block.conv1, weight)
-
-        # extract the batch norm based on the input dimension (using the associated mask)
-        m, v = block.bn1.running_mean, block.bn1.running_var
-        m = torch.index_select(m, 0, conv1_indexes)
-        v = torch.index_select(v, 0, conv1_indexes)
-        block.bn1 = create_layer(block.bn1, (m, v))
-
-        conv2_weight = block.conv2.weight
-        conv2_weight = torch.index_select(conv2_weight, 1, conv1_indexes)
-
-        # if downsample than we need to calcualte the new indexes to extract the weights in the following layers
-        if 'block.downsample.0' in block_masks:
-            weight = block.downsample[0].weight
-            weight = torch.index_select(weight, 1, input_indexes)
-            weight, input_indexes = extract_weights(weight, block_masks['block.downsample.0'])
-            block.downsample[0] = create_layer(block.downsample[0], weight)
-
-            m, v = block.downsample[1].running_mean, block.downsample[1].running_var
-            m = torch.index_select(m, 0, input_indexes)
-            v = torch.index_select(v, 0, input_indexes)
-
-            block.downsample[1] = create_layer(block.downsample[1], (m, v))
-        else:
-            # print(block.shortcut, isinstance(block.shortcut, LambdaLayer))
-            if isinstance(block.shortcut, LambdaLayer):
-                planes = block.conv1.weight.shape[0]
-                print(block.conv1.weight.shape)
-                block.shortcut = LambdaLayer(lambda x:
-                                                F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4),
-                                                      "constant", 0))
-
-        # extract the weights in the second layer based on the input dimension (using the associated mask)
-        # weight, conv1_indexes = extract_weights(conv2_weight, masks['conv1'])
-        # weight_conv2 = torch.index_select(block.conv2.weight, 1, conv1_indexes)
-        conv2_weight = torch.index_select(conv2_weight, 0, input_indexes)
-        block.conv2 = create_layer(block.conv2, conv2_weight)
-
-        m, v = block.bn2.running_mean, block.bn2.running_var
-        m = torch.index_select(m, 0, input_indexes)
-        v = torch.index_select(v, 0, input_indexes)
-
-        block.bn2 = create_layer(block.bn2, (m, v))
-
-        return block, input_indexes
+    # def extract_structured_from_block(block, block_masks, input_indexes):
+    #
+    #     # extract the weights based on the input dimension (using the associated mask)
+    #     weight = block.conv1.weight
+    #     weight = torch.index_select(weight, 1, input_indexes)
+    #     weight, conv1_indexes = extract_weights(weight, block_masks['conv1'])
+    #     block.conv1 = create_layer(block.conv1, weight)
+    #
+    #     # extract the batch norm based on the input dimension (using the associated mask)
+    #     m, v = block.bn1.running_mean, block.bn1.running_var
+    #     m = torch.index_select(m, 0, conv1_indexes)
+    #     v = torch.index_select(v, 0, conv1_indexes)
+    #     block.bn1 = create_layer(block.bn1, (m, v))
+    #
+    #     conv2_weight = block.conv2.weight
+    #     conv2_weight = torch.index_select(conv2_weight, 1, conv1_indexes)
+    #
+    #     # if downsample than we need to calcualte the new indexes to extract the weights in the following layers
+    #     if 'block.downsample.0' in block_masks:
+    #         weight = block.downsample[0].weight
+    #         weight = torch.index_select(weight, 1, input_indexes)
+    #         weight, input_indexes = extract_weights(weight, block_masks['block.downsample.0'])
+    #         block.downsample[0] = create_layer(block.downsample[0], weight)
+    #
+    #         m, v = block.downsample[1].running_mean, block.downsample[1].running_var
+    #         m = torch.index_select(m, 0, input_indexes)
+    #         v = torch.index_select(v, 0, input_indexes)
+    #
+    #         block.downsample[1] = create_layer(block.downsample[1], (m, v))
+    #     else:
+    #         # print(block.shortcut, isinstance(block.shortcut, LambdaLayer))
+    #         if isinstance(block.shortcut, LambdaLayer):
+    #             planes = block.conv1.weight.shape[0]
+    #             block.shortcut = LambdaLayer(lambda x:
+    #                                             F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4),
+    #                                                   "constant", 0))
+    #
+    #     # extract the weights in the second layer based on the input dimension (using the associated mask)
+    #     # weight, conv1_indexes = extract_weights(conv2_weight, masks['conv1'])
+    #     # weight_conv2 = torch.index_select(block.conv2.weight, 1, conv1_indexes)
+    #     conv2_weight = torch.index_select(conv2_weight, 0, input_indexes)
+    #     block.conv2 = create_layer(block.conv2, conv2_weight)
+    #
+    #     m, v = block.bn2.running_mean, block.bn2.running_var
+    #     m = torch.index_select(m, 0, input_indexes)
+    #     v = torch.index_select(v, 0, input_indexes)
+    #
+    #     block.bn2 = create_layer(block.bn2, (m, v))
+    #
+    #     return block, input_indexes
 
     def extract_structured_from_sequential(module, initial_mask=None, prefix=''):
         if not isinstance(module, nn.Sequential):
@@ -238,29 +244,38 @@ def extract_inner_model(model, masks, re_init=False):
     elif isinstance(model, ResNet):
         new_model = deepcopy(model)
         mask_indexes = None
-        # first_mask = masks['conv1']
-        # weights, mask_indexes = extract_weights(new_model.conv1.weight.data, first_mask)
-        # new_model.conv1 = create_layer(new_model.conv1, weights)
-        #
-        # m, v = new_model.bn1.running_mean, new_model.bn1.running_var
-        # m = torch.index_select(m, 0, mask_indexes)
-        # v = torch.index_select(v, 0, mask_indexes)
-        # new_model.bn1 = create_layer(new_model.bn1, (m, v))
+
+        # fc_mask = masks.get('fc')
+        fc_mask = None
+        if fc_mask is not None:
+            fc_indexes = fc_mask.nonzero(as_tuple=True)[0].to(new_model.fc.layer.weight.device)
+        else:
+            fc_indexes = None
 
         for i in range(1, 4):
             l = getattr(new_model, 'layer{}'.format(i))
+            if i == 3 and fc_indexes is not None:
+                output_indexes = fc_indexes
+            else:
+                output_indexes = None
+
             for si, s in enumerate(l):
                 block_name = 'layer{}.{}'.format(i, si)
                 block_masks = {name[len(block_name)+1:]: mask for name, mask in masks.items() if block_name in name}
                 # block, mask_indexes = extract_structured_from_block(deepcopy(s), input_indexes=mask_indexes,
                 #                                                     block_masks=block_masks)
-                new_block, mask_indexes = create_new_block(s, block_masks, mask_indexes)
+                new_block, mask_indexes = create_new_block(s, block_masks, mask_indexes, output_indexes=output_indexes)
                 l[si] = new_block
 
+        fc_weight = new_model.fc.weight
         if mask_indexes is not None:
-            fc = new_model.fc
-            weight = torch.index_select(fc.weight, 1, mask_indexes)
-            new_model.fc = create_layer(fc, weight)
+            # fc = new_model.fc
+            fc_weight = torch.index_select(fc_weight, 1, mask_indexes)
+            # new_model.fc = create_layer(fc, weight)
+        if fc_indexes is not None:
+            fc_weight = torch.index_select(fc_weight, 0, fc_indexes)
+        new_model.fc = create_layer(new_model.fc, fc_weight)
+
     else:
         assert False
 
@@ -311,7 +326,6 @@ if __name__ == '__main__':
                           batch_ensemble=True)
 
     p = calculate_trainable_parameters(resnet18)
-    print(p)
 
     x = torch.cat([x for _ in range(2)], dim=0)
 
@@ -346,19 +360,9 @@ if __name__ == '__main__':
                                          global_pruning=True)
 
         model = extract_inner_model(resnet18, masks, False)
-        print(model)
 
         p = calculate_trainable_parameters(model)
         print(mi, p)
 
         model(x)
-
-    # print(resnet18)
-    # x = torch.rand((12, 3, 224, 224))
-    # r = resnet18(x)
-    # remove_wrappers_from_model(resnet18)
-    # r = resnet18(x)
-    # print(r.shape)
-    # print(resnet18)
-
 

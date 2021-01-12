@@ -166,7 +166,7 @@ def be_model_training(model, optimizer, train_loader, epochs, scheduler, early_s
                 distr = module.distributions
                 for i, d1 in enumerate(distr):
                     for j, d2 in enumerate(distr):
-                        if j == i:
+                        if j <= i:
                             continue
                         d += MMD(d1, d2)
 

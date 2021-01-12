@@ -31,6 +31,8 @@ class EnsembleMaskedWrapper(nn.Module):
 
         if where == 'output':
             mask_dim = (1, mask_dim[0])
+        elif where == 'inuput':
+            mask_dim = (1, mask_dim[1])
         else:
             assert False, 'The following types are allowed: output, input and weights. {} given'.format(where)
 
@@ -120,9 +122,10 @@ class EnsembleMaskedWrapper(nn.Module):
         return kl
 
     def forward(self, x):
-        # if self.where == 'input':
-        #     x = self.mask * x
-        #
+        if self.where == 'input':
+            mask = self.mask
+            x = mask * x
+
         # if self.where == 'weights':
         #     w = self.mask * self.layer.weight
         # else:
@@ -135,15 +138,15 @@ class EnsembleMaskedWrapper(nn.Module):
         else:
             o = nn.functional.fc(x, w, self.layer.bias)
 
-        # if self.where == 'output':
-        mask = self.mask
+        if self.where == 'output':
+            mask = self.mask
+            o = o * mask
+
         # mask.requires_grad = True
         # mask = Parameter(mask, requires_grad=True)
         # mask.retain_grad()
         # # save last mask to retrieve the gradient
         self.last_mask = mask
-
-        o = o * mask
 
         return o
 
@@ -175,12 +178,14 @@ class BatchEnsembleMaskedWrapper(nn.Module):
         self._current_distribution = -1
 
         where = where.lower()
-        if not where == 'weights':
-            if where == 'output':
-                mask_dim = (mask_dim[0],)
-                # mask_dim = (1, mask_dim[0])
-            else:
-                assert False, 'The following types are allowed: output, input and weights. {} given'.format(where)
+        # if not where == 'weights':
+        if where == 'output':
+            mask_dim = (mask_dim[0],)
+            # mask_dim = (1, mask_dim[0])
+        elif where == 'input':
+            mask_dim = (mask_dim[1],)
+        else:
+            assert False, 'The following types are allowed: output, input. {} given'.format(where)
 
             # if self.is_conv:
             #     mask_dim = mask_dim + (1, 1)
@@ -242,6 +247,29 @@ class BatchEnsembleMaskedWrapper(nn.Module):
         return kl
 
     def forward(self, x):
+        if self.where == 'input':
+            batch_size = x.size(0)
+            ensemble = len(self.distributions)
+            m = batch_size // ensemble
+            rest = batch_size % ensemble
+
+            masks = [d(reduce=True) for d in self.distributions]
+            self.last_mask = masks
+
+            masks = torch.stack(masks, 0)
+            masks = masks.repeat(1, m).view(-1, masks.size(-1))
+
+            if self.is_conv:
+                masks = masks.unsqueeze(-1).unsqueeze(-1)
+
+            if rest > 0:
+                masks = torch.cat([masks, masks[:rest]], dim=0)
+
+            x = x * masks
+
+            # mask = self.mask
+            # x = mask * x
+
         # if self.where == 'input':
         #     x = self.mask * x
         #
@@ -255,7 +283,7 @@ class BatchEnsembleMaskedWrapper(nn.Module):
             o = nn.functional.conv2d(x, w, self.layer.bias, stride=self.layer.stride, padding=self.layer.padding,
                                      dilation=self.layer.dilation, groups=self.layer.groups)
         else:
-            o = nn.functional.fc(x, w, self.layer.bias)
+            o = nn.functional.linear(x, w, self.layer.bias)
 
         if self.where == 'output':
             batch_size = x.size(0)

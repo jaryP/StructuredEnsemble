@@ -6,6 +6,7 @@ from torch import nn
 from torchvision.models import VGG
 
 from methods.base import EnsembleMethod
+from models import ResNet
 from utils import train_model
 
 
@@ -14,7 +15,7 @@ class DropoutWrapper(nn.Module):
         super().__init__()
         self.p = p
         self.layer = layer
-        self.inplce = inplace
+        self.inplace = inplace
 
     def forward(self, x):
         o = self.layer(x)
@@ -22,7 +23,7 @@ class DropoutWrapper(nn.Module):
         return o
 
 
-def wrap_dropout(module, p, inplace=False):
+def wrap_dropout(model, p, inplace=False):
     def apply_mask_sequential(s, skip_last=False):
         for i, l in enumerate(s):
             if isinstance(l, (nn.Linear, nn.Conv2d)):
@@ -30,11 +31,15 @@ def wrap_dropout(module, p, inplace=False):
                     continue
                 s[i] = DropoutWrapper(l, p=p, inplace=inplace)
 
-    if isinstance(module, nn.Sequential):
-        apply_mask_sequential(module, skip_last=True)
-    elif isinstance(module, VGG):
-        apply_mask_sequential(module.features, skip_last=False)
-        apply_mask_sequential(module.classifier, skip_last=True)
+    if isinstance(model, nn.Sequential):
+        apply_mask_sequential(model, skip_last=True)
+    elif isinstance(model, VGG):
+        apply_mask_sequential(model.features, skip_last=False)
+        apply_mask_sequential(model.classifier, skip_last=True)
+    elif isinstance(model, ResNet):
+        model.conv1 = DropoutWrapper(model.conv1, p=p, inplace=inplace)
+        for i in range(1, 4):
+            apply_mask_sequential(getattr(model, 'layer{}'.format(i)), skip_last=True)
     else:
         assert False
 
@@ -48,10 +53,14 @@ class MCDropout(EnsembleMethod):
         self.method_parameters = method_parameters
 
         self.device = device
-        self.t = method_parameters.get('sample', 1)
+
+        self.training_t = method_parameters.get('train_sample', 1)
+        self.testing_t = method_parameters.get('test_sample', 1)
+        p = method_parameters.get('p', 0.2)
+        inplace = method_parameters.get('inplace', False)
 
         self.model = deepcopy(model)
-        wrap_dropout(self.model, p=method_parameters['p'], inplace=method_parameters['inplace'])
+        wrap_dropout(self.model, p=p, inplace=inplace)
 
     def train_models(self, epochs, train_dataset, eval_dataset, test_dataset, optimizer, scheduler=None,
               regularization=None, early_stopping=None,
@@ -65,17 +74,20 @@ class MCDropout(EnsembleMethod):
                                                             scheduler=train_scheduler,
                                                             early_stopping=early_stopping,
                                                             test_loader=test_dataset, eval_loader=eval_dataset,
-                                                            device=self.device)
+                                                            device=self.device, t=self.training_t)
 
         self.model.load_state_dict(best_model)
 
         return [scores]
 
-    def predict_proba(self, x, y, **kwargs):
+    def predict_logits(self, x, y, reduce=True, **kwargs):
         x, y = x.to(self.device), y.to(self.device)
-        outputs = [self.model(x) for _ in range(self.t)]
-        outputs = torch.stack(outputs, 0).mean(0)
-        outputs = torch.nn.functional.softmax(outputs, -1)
+        outputs = [self.model(x) for _ in range(self.testing_t)]
+        outputs = torch.stack(outputs, dim=1)
+        # print(outputs.shape)
+        if reduce:
+            outputs = torch.mean(outputs, 1)
+        # outputs = torch.nn.functional.softmax(outputs, -1)
         return outputs
 
     def load(self, path):

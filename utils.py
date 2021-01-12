@@ -55,7 +55,6 @@ def ensures_path(path):
     return True
 
 
-
 def get_model(name, input_size=None, output=None):
     name = name.lower()
     if name == 'lenet-300-100':
@@ -224,7 +223,7 @@ def calculate_trainable_parameters(model):
 
 
 def train_model(model, optimizer, train_loader, epochs, scheduler, early_stopping=None,
-                test_loader=None, eval_loader=None, device='cpu'):
+                test_loader=None, eval_loader=None, device='cpu', t = 1):
 
     scores = []
     mean_losses = []
@@ -243,7 +242,11 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
         losses = []
         for i, (x, y) in enumerate(train_loader):
             x, y = x.to(device), y.to(device)
-            pred = model(x)
+            if t > 1:
+                pred = torch.stack([model(x) for _ in range(t)], dim=0)
+                pred = pred.mean(0)
+            else:
+                pred = model(x)
             loss = torch.nn.functional.cross_entropy(pred, y, reduction='none')
             losses.extend(loss.tolist())
             loss = loss.mean()
