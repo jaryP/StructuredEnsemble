@@ -1,0 +1,13 @@
+method: mc_dropout
+name: n3
+save_path: results/cifar10_resnet20/dropout
+load: Yes
+save: Yes
+optimizer: configs/optimizers/resnet20.yaml
+trainer: configs/training/cifar10_resnet20.yaml
+device: 0
+method_parameters:
+  p: 0.25
+  n_ensemble: 2
+  train_sample: 2
+  test_sample: 5

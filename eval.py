@@ -89,6 +89,8 @@ def get_predictions(method, dataset):
 def get_logits(method, dataset):
     probs = []
     true = []
+    predictions = []
+
     method.eval()
 
     for x, y in dataset:
@@ -96,10 +98,15 @@ def get_logits(method, dataset):
         p = method.predict_logits(x, y, False)
         probs.extend(p.tolist())
 
+        p = torch.mean(p, 1)
+        pred = torch.argmax(p, -1)
+        predictions.extend(pred.tolist())
+
     true = np.asarray(true)
+    predictions = np.asarray(predictions)
     probs = np.stack(probs, 0)
 
-    return probs, true
+    return probs, true, predictions
 
 
 # def eval_models(model, dataset, topk=None, device='cpu'):

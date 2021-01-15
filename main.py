@@ -68,8 +68,10 @@ for experiment in sys.argv[1:]:
 
     train, test, input_size, classes = get_dataset(trainer['dataset'], model_name=trainer['model'])
 
-    train_loader = torch.utils.data.DataLoader(dataset=train, batch_size=batch_size, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(dataset=test, batch_size=batch_size, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(dataset=train, batch_size=batch_size, shuffle=True,
+                                               pin_memory=True, num_workers=4)
+    test_loader = torch.utils.data.DataLoader(dataset=test, batch_size=batch_size, shuffle=False,
+                                              pin_memory=True, num_workers=4)
     eval_loader = None
 
     for experiment_seed in range(experiments):
@@ -132,11 +134,11 @@ for experiment in sys.argv[1:]:
             method = ExtremeBatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
             # method = BatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
         # elif method_name == 'reverse_supermask':
-            # method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
+        # method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
         # elif method_name == 'grad_supermask':
-            # method = GradSuperMask(model=model, method_parameters=method_parameters, device=device)
+        # method = GradSuperMask(model=model, method_parameters=method_parameters, device=device)
         # elif method_name == 'tree_supermask':
-            # method = TreeSuperMask(model=model, method_parameters=method_parameters, device=device)
+        # method = TreeSuperMask(model=model, method_parameters=method_parameters, device=device)
         elif method_name == 'mc_dropout':
             method = MCDropout(model=model, method_parameters=method_parameters, device=device)
         else:
@@ -160,10 +162,12 @@ for experiment in sys.argv[1:]:
                     pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
                 logger.info('Results and models saved.')
 
-        corrupted_cifar_uncertainty(method, batch_size)
         # logger.info('Ensemble score on train: {}'.format(eval_method(method, dataset=train_loader)[0]))
         # logger.info('Ensemble score on eval: {}'.format(eval_method(method, dataset=eval_loader)[0]))
-        # logger.info('Ensemble score on test: {}'.format(eval_method(method, dataset=test_loader)[0]))
+        logger.info('Ensemble score on test: {}'.format(eval_method(method, dataset=test_loader)[0]))
+
+        if trainer['dataset'] in ['cifar10', 'cifar100']:
+            s, h, bcu = corrupted_cifar_uncertainty(method, batch_size, dataset=trainer['dataset'])
 
         params = 0
         if hasattr(method, 'models'):

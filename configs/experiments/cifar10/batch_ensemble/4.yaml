@@ -1,0 +1,10 @@
+method: batch_ensemble
+name: n4
+save_path: results/cifar10/batch_ensemble
+load: Yes
+save: Yes
+optimizer: configs/optimizers/sgd_vgg11.yaml
+trainer: configs/training/cifar10.yaml
+device: 0
+method_parameters:
+  n_ensemble: 4
