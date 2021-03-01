@@ -488,8 +488,11 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
                     f = lambda x: torch.max(x, 0)
 
                 ens_grads = {name: f(torch.stack(gs, 0)).detach().cpu() for name, gs in ens_grads.items()}
-                print(ens_grads['fc'])
 
+                # classifier for vgg
+                # fc for ResNet
+                # print(ens_grads['fc'])
+                
                 masks = get_masks_from_gradients(gradients=ens_grads, prune_percentage=pruning,
                                                  global_pruning=self.global_pruning, device=self.device)
 
@@ -523,9 +526,9 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
                                                                         device=self.device)
 
             model.load_state_dict(best_model)
-            model.to('cpu')
+            # model.to('cpu')
             all_scores.append(scores)
-        self.device = 'cpu'
+        # self.device = 'cpu'
         return all_scores
 
     def predict_logits(self, x, y, reduce):
@@ -536,11 +539,12 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
         return outputs
 
     def load(self, path):
-        self.device = 'cpu'
+        # self.device = 'cpu'
         for i in range(self.ensemble):
             with open(os.path.join(path, 'model_{}.pt'.format(i)), 'rb') as file:
-                m = pickle.load(file)
-            # m = torch.load(os.path.join(path, 'model_{}.pt'.format(i)), map_location=self.device)
+                # m = pickle.load(file)
+                m = torch.load(os.path.join(path, 'model_{}.pt'.format(i)),
+                               map_location=self.device)
             m.to(self.device)
             self.models.append(m)
 

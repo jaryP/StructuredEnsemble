@@ -9,6 +9,7 @@ from torchvision.datasets.utils import download_and_extract_archive
 import numpy as np
 from torchvision.transforms import transforms
 
+from calibration import ece_score
 from eval import get_logits, eval_method
 
 BENCHMARK_CORRUPTIONS = [
@@ -204,8 +205,12 @@ def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False,
 
     if dataset == 'cifar10':
         dataset = CorruptedCifar10
+        t = [transforms.ToTensor(),
+             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
     else:
         dataset = CorruptedCifar100
+        t = [transforms.ToTensor(),
+             transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))]
 
     if use_extra_corruptions:
         corruptions = chain(BENCHMARK_CORRUPTIONS, EXTRA_CORRUPTIONS)
@@ -215,9 +220,7 @@ def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False,
     scores = {name: {} for name in corruptions}
     entropy = {name: {} for name in corruptions}
     buc = {name: {} for name in corruptions}
-
-    t = [transforms.ToTensor(),
-         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
+    eces = {name: {} for name in corruptions}
 
     for name in corruptions:
         for severity in range(1, 6):
@@ -227,27 +230,31 @@ def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False,
                                                                           transform=transforms.Compose(t)),
                                                  batch_size=batch_size, shuffle=False,
                                                  pin_memory=True, num_workers=4)
+
+            ece, _, _, _ = ece_score(method, loader)
+
+            eces[name][severity] = ece
             scores[name][severity] = eval_method(method, dataset=loader)
 
             logits, labels, predictions = get_logits(method, loader)
 
             _entropy = dataset_entropy(logits)
             _bcu = epistemic_aleatoric_uncertainty(logits)[0]
-            mask = labels == predictions
+            # mask = labels == predictions
             # print(mask)
             # print(_bcu.shape, entropy.shape, mask.shape)
 
             entropy[name][severity] = np.mean(_entropy)
             buc[name][severity] = np.mean(_bcu)
             # print(labels == predictions)
-            print(name, severity)
-            print(scores[name][severity])
-            print(np.mean(_bcu[mask]), np.mean(_bcu[~mask]))
-            print(np.mean(_entropy[mask]), np.mean(_entropy[~mask]))
+            # print(name, severity)
+            # print(scores[name][severity])
+            # print(np.mean(_bcu[mask]), np.mean(_bcu[~mask]))
+            # print(np.mean(_entropy[mask]), np.mean(_entropy[~mask]))
             # print(np.mean(bcu[mask]), np.mean(buc[~mask]))
             # print(np.mean(entropy[mask]), np.mean(entropy[~mask]))
 
-    return entropy, scores
+    return entropy, scores, buc, ece
 
 
 def dataset_entropy(logits):

@@ -150,6 +150,7 @@ def get_dataset(name, model_name):
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
+
         t = [
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
@@ -258,6 +259,8 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
         if scheduler is not None:
             if isinstance(scheduler, (StepLR, MultiStepLR)):
                 scheduler.step()
+            elif hasattr(scheduler, 'step'):
+                scheduler.step()
 
         if eval_loader is not None:
             eval_scores, _ = eval_model(model, eval_loader, topk=[1, 5], device=device)
@@ -275,6 +278,9 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
             elif r > 0:
                 best_model = model.state_dict()
                 best_model_i = epoch
+        else:
+            best_model = model.state_dict()
+            best_model_i = epoch
 
         train_scores, _ = eval_model(model, train_loader, device=device)
         test_scores, _ = eval_model(model, test_loader, device=device)

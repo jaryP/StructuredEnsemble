@@ -47,7 +47,6 @@ def wrap_dropout(model, p, inplace=False):
 class MCDropout(EnsembleMethod):
     def __init__(self, model, method_parameters,
                  device='cpu', **kwargs):
-
         super().__init__(**kwargs)
 
         self.method_parameters = method_parameters
@@ -63,18 +62,17 @@ class MCDropout(EnsembleMethod):
         wrap_dropout(self.model, p=p, inplace=inplace)
 
     def train_models(self, epochs, train_dataset, eval_dataset, test_dataset, optimizer, scheduler=None,
-              regularization=None, early_stopping=None,
-              **kwargs):
-
+                     regularization=None, early_stopping=None,
+                     **kwargs):
         optim = optimizer([param for name, param in self.model.named_parameters() if param.requires_grad])
         train_scheduler = scheduler(optim)
 
         best_model, scores, best_model_scores, losses = train_model(model=self.model, optimizer=optim,
-                                                            epochs=epochs, train_loader=train_dataset,
-                                                            scheduler=train_scheduler,
-                                                            early_stopping=early_stopping,
-                                                            test_loader=test_dataset, eval_loader=eval_dataset,
-                                                            device=self.device, t=self.training_t)
+                                                                    epochs=epochs, train_loader=train_dataset,
+                                                                    scheduler=train_scheduler,
+                                                                    early_stopping=early_stopping,
+                                                                    test_loader=test_dataset, eval_loader=eval_dataset,
+                                                                    device=self.device, t=self.training_t)
 
         self.model.load_state_dict(best_model)
 

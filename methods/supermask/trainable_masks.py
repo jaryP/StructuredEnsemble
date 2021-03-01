@@ -56,6 +56,7 @@ def get_trainable_mask(size, initial_distribution):
 
     if initial_distribution.get('trainable', True):
         return nn.Parameter(t, requires_grad=True)
+
     return t
 
 

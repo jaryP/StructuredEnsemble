@@ -3,7 +3,7 @@ from collections import defaultdict
 from copy import deepcopy
 
 import numpy as np
-import seaborn as sns
+# import seaborn as sns
 import torch
 from matplotlib import pyplot as plt
 from torch.optim import Adam
@@ -435,17 +435,17 @@ class SuperMask(EnsembleMethod):
         self.initial_distributions = torch.load(os.path.join(path, 'initial_distributions.pt'),
                                                 map_location=self.device)
 
-        for k, v in self.final_distributions.items():
-            plt.figure(k)
-            ax = plt.subplot(121)
-            d = v[0](size=5, reduce=False)
-            d = d.squeeze().detach().cpu().numpy()
-            sns.barplot(data=d, ax=ax)
-
-            ax = plt.subplot(122, sharey=ax)
-            d = v[1](size=5, reduce=False)
-            d = d.squeeze().detach().cpu().numpy()
-            sns.barplot(data=d, ax=ax)
+        # for k, v in self.final_distributions.items():
+        #     plt.figure(k)
+        #     ax = plt.subplot(121)
+        #     d = v[0](size=5, reduce=False)
+        #     d = d.squeeze().detach().cpu().numpy()
+        #     sns.barplot(data=d, ax=ax)
+        #
+        #     ax = plt.subplot(122, sharey=ax)
+        #     d = v[1](size=5, reduce=False)
+        #     d = d.squeeze().detach().cpu().numpy()
+        #     sns.barplot(data=d, ax=ax)
 
         plt.show()
 
