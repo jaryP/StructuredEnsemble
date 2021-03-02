@@ -7,7 +7,8 @@ import numpy as np
 # from torchvision.models.resnet import BasicBlock, ResNet
 import torch.nn.functional as F
 
-from methods.supermask.layers import EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper
+from methods.supermask.layers import EnsembleMaskedWrapper, \
+    BatchEnsembleMaskedWrapper, BatchEnsembleForwardMaskedWrapper
 from methods.supermask.resnet_utils import ResNetBlockWrapper
 from models import ResNet, BasicBlock
 
@@ -16,24 +17,46 @@ def copy_sequential(s):
     return deepcopy(s)
 
 
-def add_wrappers_to_model(module, masks_params=None, ensemble=1, batch_ensemble=False, single_distribution=False):
-    where = 'output'
+def add_wrappers_to_model(module,
+                          masks_params=None,
+                          ensemble=1,
+                          batch_ensemble=False,
+                          single_distribution=False,
+                          training_supermask=False,
+                          pruning_percentage=None):
+    def get_wrapper():
+        where = 'output'
 
-    if batch_ensemble:
-        wrapper = BatchEnsembleMaskedWrapper
-    else:
-        wrapper = EnsembleMaskedWrapper
+        if batch_ensemble:
+            if training_supermask:
+                wrapper = BatchEnsembleForwardMaskedWrapper
+                assert pruning_percentage is not None
+            else:
+                wrapper = BatchEnsembleMaskedWrapper
+        else:
+            wrapper = EnsembleMaskedWrapper
+
+        def w(l):
+            return wrapper(l,
+                           where=where,
+                           masks_params=masks_params,
+                           ensemble=ensemble,
+                           single_distribution=single_distribution,
+                           pruning_percentage=pruning_percentage)
+
+        return w
+
+    wrapper_fn = get_wrapper()
 
     def apply_mask_sequential(s, skip_last):
         for i, l in enumerate(s):
             if isinstance(l, (nn.Linear, nn.Conv2d)):
                 if skip_last and i == len(s) - 1:
                     continue
-                s[i] = wrapper(l, where=where, masks_params=masks_params,
-                               ensemble=ensemble, single_distribution=single_distribution)
+                s[i] = wrapper_fn(l)
+
             elif isinstance(l, BasicBlock):
-                s[i] = ResNetBlockWrapper(l, masks_params=masks_params,
-                                          ensemble=ensemble, batch_ensemble=batch_ensemble)
+                s[i] = ResNetBlockWrapper(l, wrapper_fn)
 
     spl = True  # if structured else False
     if isinstance(module, nn.Sequential):
@@ -42,13 +65,12 @@ def add_wrappers_to_model(module, masks_params=None, ensemble=1, batch_ensemble=
         apply_mask_sequential(module.features, skip_last=False)
         apply_mask_sequential(module.classifier, skip_last=True)
     elif isinstance(module, ResNet):
-        module.conv1 = wrapper(module.conv1, masks_params=masks_params, where='output',
-                               ensemble=ensemble, batch_ensemble=batch_ensemble)
+        module.conv1 = wrapper_fn(module.conv1)
         for i in range(1, 4):
-            apply_mask_sequential(getattr(module, 'layer{}'.format(i)), skip_last=True)
+            apply_mask_sequential(getattr(module, 'layer{}'.format(i)),
+                                  skip_last=True)
 
-        module.fc = wrapper(module.fc, masks_params=masks_params, where='output',
-                            ensemble=ensemble, batch_ensemble=batch_ensemble)
+        module.fc = wrapper_fn(module.fc)
     else:
         assert False
 
@@ -56,13 +78,16 @@ def add_wrappers_to_model(module, masks_params=None, ensemble=1, batch_ensemble=
 def remove_wrappers_from_model(model):
     def remove_masked_layer(s):
         for i, l in enumerate(s):
-            if isinstance(l, (EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper)):
+            if isinstance(l,
+                          (EnsembleMaskedWrapper,
+                           BatchEnsembleMaskedWrapper,
+                           BatchEnsembleForwardMaskedWrapper)):
                 s[i] = l.layer
             if isinstance(l, ResNetBlockWrapper):
                 s[i] = l.block
                 if isinstance(l.block.shortcut, nn.Sequential):
                     if len(l.block.shortcut) > 0:
-                     # if l.block.downsample is not None:
+                        # if l.block.downsample is not None:
                         s[i].shortcut[0] = l.block.shortcut[0].layer
 
     if isinstance(model, nn.Sequential):
@@ -72,7 +97,10 @@ def remove_wrappers_from_model(model):
         remove_masked_layer(model.classifier)
     elif isinstance(model, ResNet):
         model.conv1 = model.conv1.layer
-        if isinstance(model.fc, (EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper)):
+        if isinstance(model.fc,
+                      (EnsembleMaskedWrapper,
+                       BatchEnsembleMaskedWrapper,
+                       BatchEnsembleForwardMaskedWrapper)):
             model.fc = model.fc.layer
         for i in range(1, 4):
             remove_masked_layer(getattr(model, 'layer{}'.format(i)))
@@ -91,12 +119,16 @@ def extract_inner_model(model, masks, re_init=False):
     def create_layer(layer, new_w):
         if isinstance(layer, nn.Linear):
             o, i = new_w.shape
-            nl = nn.Linear(in_features=i, out_features=o, bias=layer.bias is not None).to(new_w.device)
+            nl = nn.Linear(in_features=i, out_features=o,
+                           bias=layer.bias is not None).to(new_w.device)
         elif isinstance(layer, nn.Conv2d):
             o, i = new_w.shape[:2]
-            nl = nn.Conv2d(in_channels=i, out_channels=o, bias=layer.bias is not None,
-                           kernel_size=layer.kernel_size, stride=layer.stride, padding_mode=layer.padding_mode,
-                           padding=layer.padding, dilation=layer.dilation, groups=layer.groups).to(new_w.device)
+            nl = nn.Conv2d(in_channels=i, out_channels=o,
+                           bias=layer.bias is not None,
+                           kernel_size=layer.kernel_size, stride=layer.stride,
+                           padding_mode=layer.padding_mode,
+                           padding=layer.padding, dilation=layer.dilation,
+                           groups=layer.groups).to(new_w.device)
         elif isinstance(layer, BatchNorm2d):
             w, v = new_w
             inp = w.size(0)
@@ -117,7 +149,8 @@ def extract_inner_model(model, masks, re_init=False):
         weight = block.conv1.weight
         if input_indexes is not None:
             weight = torch.index_select(weight, 1, input_indexes)
-        conv1_weight, conv1_indexes = extract_weights(weight, block_mask['conv1'])
+        conv1_weight, conv1_indexes = extract_weights(weight,
+                                                      block_mask['conv1'])
 
         conv2_weight = block.conv2.weight
         conv2_weight = torch.index_select(conv2_weight, 1, conv1_indexes)
@@ -132,7 +165,8 @@ def extract_inner_model(model, masks, re_init=False):
         new_hidden_dim, new_input_dim, _, _ = conv1_weight.shape
         new_output_dim, _, _, _ = conv2_weight.shape
 
-        new_block = BasicBlock(in_planes=new_input_dim, planes=new_output_dim, hidden_planes=new_hidden_dim,
+        new_block = BasicBlock(in_planes=new_input_dim, planes=new_output_dim,
+                               hidden_planes=new_hidden_dim,
                                stride=block.stride)
         if not re_init:
             new_block.conv1.weight.data = conv1_weight.data
@@ -191,7 +225,8 @@ def extract_inner_model(model, masks, re_init=False):
     #
     #     return block, input_indexes
 
-    def extract_structured_from_sequential(module, initial_mask=None, prefix=''):
+    def extract_structured_from_sequential(module, initial_mask=None,
+                                           prefix=''):
         if not isinstance(module, nn.Sequential):
             return module, initial_mask
 
@@ -199,7 +234,7 @@ def extract_inner_model(model, masks, re_init=False):
 
         last_mask_index = initial_mask
         for name, m in module.named_modules():
-            name = prefix+name
+            name = prefix + name
             if isinstance(m, nn.Sequential):
                 continue
             if isinstance(m, (nn.Linear, nn.Conv2d)):
@@ -210,7 +245,8 @@ def extract_inner_model(model, masks, re_init=False):
                     last_mask_index = None
 
                 if name in masks:
-                    mask_index = masks[name].nonzero(as_tuple=True)[0].to(m.weight.device)
+                    mask_index = masks[name].nonzero(as_tuple=True)[0].to(
+                        m.weight.device)
                     weight = torch.index_select(weight, 0, mask_index)
                     last_mask_index = mask_index
 
@@ -228,14 +264,17 @@ def extract_inner_model(model, masks, re_init=False):
         new_model = deepcopy(model)
 
         prefix = 'features.'
-        features, last_mask = extract_structured_from_sequential(new_model.features, prefix='features.')
+        features, last_mask = extract_structured_from_sequential(
+            new_model.features, prefix='features.')
 
-        indexes = torch.arange(0, 512 * 7 * 7, device=last_mask.device, dtype=torch.long)
+        indexes = torch.arange(0, 512 * 7 * 7, device=last_mask.device,
+                               dtype=torch.long)
         indexes = indexes.view((512, 7, 7))
         indexes = torch.index_select(indexes, 0, last_mask)
         last_mask = indexes.view(-1)
 
-        classifier, _ = extract_structured_from_sequential(new_model.classifier, initial_mask=last_mask,
+        classifier, _ = extract_structured_from_sequential(new_model.classifier,
+                                                           initial_mask=last_mask,
                                                            prefix='classifier.')
 
         new_model.features = features
@@ -248,7 +287,8 @@ def extract_inner_model(model, masks, re_init=False):
         # fc_mask = masks.get('fc')
         fc_mask = None
         if fc_mask is not None:
-            fc_indexes = fc_mask.nonzero(as_tuple=True)[0].to(new_model.fc.layer.weight.device)
+            fc_indexes = fc_mask.nonzero(as_tuple=True)[0].to(
+                new_model.fc.layer.weight.device)
         else:
             fc_indexes = None
 
@@ -261,10 +301,13 @@ def extract_inner_model(model, masks, re_init=False):
 
             for si, s in enumerate(l):
                 block_name = 'layer{}.{}'.format(i, si)
-                block_masks = {name[len(block_name)+1:]: mask for name, mask in masks.items() if block_name in name}
+                block_masks = {name[len(block_name) + 1:]: mask for name, mask
+                               in masks.items() if block_name in name}
                 # block, mask_indexes = extract_structured_from_block(deepcopy(s), input_indexes=mask_indexes,
                 #                                                     block_masks=block_masks)
-                new_block, mask_indexes = create_new_block(s, block_masks, mask_indexes, output_indexes=output_indexes)
+                new_block, mask_indexes = create_new_block(s, block_masks,
+                                                           mask_indexes,
+                                                           output_indexes=output_indexes)
                 l[si] = new_block
 
         fc_weight = new_model.fc.weight
@@ -282,9 +325,11 @@ def extract_inner_model(model, masks, re_init=False):
     return new_model
 
 
-def get_masks_from_gradients(gradients, prune_percentage, global_pruning, device='cpu'):
+def get_masks_from_gradients(gradients, prune_percentage, global_pruning,
+                             device='cpu'):
     if global_pruning:
-        stacked_grads = np.concatenate([gs.view(-1).numpy() for name, gs in gradients.items()])
+        stacked_grads = np.concatenate(
+            [gs.view(-1).numpy() for name, gs in gradients.items()])
         grads_sum = np.sum(stacked_grads)
         stacked_grads = stacked_grads / grads_sum
 
@@ -293,8 +338,9 @@ def get_masks_from_gradients(gradients, prune_percentage, global_pruning, device
         masks = {name: torch.ge(gs / grads_sum, threshold).float().to(device)
                  for name, gs in gradients.items()}
     else:
-        masks = {name: torch.ge(gs, torch.quantile(gs, prune_percentage)).float()
-                 for name, gs in gradients.items()}
+        masks = {
+            name: torch.ge(gs, torch.quantile(gs, prune_percentage)).float()
+            for name, gs in gradients.items()}
 
     for name, mask in masks.items():
         mask = mask.squeeze()
@@ -322,7 +368,9 @@ if __name__ == '__main__':
     outputs = resnet18(x)
 
     add_wrappers_to_model(resnet18, ensemble=2,
-                          masks_params={'name': 'weights', 'initialization': {'name': 'constant', 'c': 1}},
+                          masks_params={'name': 'weights',
+                                        'initialization': {'name': 'constant',
+                                                           'c': 1}},
                           batch_ensemble=True)
 
     p = calculate_trainable_parameters(resnet18)
@@ -342,7 +390,8 @@ if __name__ == '__main__':
 
     for name, module in resnet18.named_modules():
         if isinstance(module, BatchEnsembleMaskedWrapper):
-            grad = torch.autograd.grad(loss, module.last_mask, retain_graph=True)
+            grad = torch.autograd.grad(loss, module.last_mask,
+                                       retain_graph=True)
             for i, g in enumerate(grad):
                 grads[i][name].append(torch.abs(g).cpu())
         # elif isinstance(module, ResNetBlockWrapper):
@@ -354,9 +403,11 @@ if __name__ == '__main__':
     for mi, ens_grads in grads.items():
         f = lambda x: torch.mean(x, 0)
 
-        ens_grads = {name: f(torch.stack(gs, 0)).detach().cpu() for name, gs in ens_grads.items()}
+        ens_grads = {name: f(torch.stack(gs, 0)).detach().cpu() for name, gs in
+                     ens_grads.items()}
 
-        masks = get_masks_from_gradients(gradients=ens_grads, prune_percentage=0.8,
+        masks = get_masks_from_gradients(gradients=ens_grads,
+                                         prune_percentage=0.8,
                                          global_pruning=True)
 
         model = extract_inner_model(resnet18, masks, False)
@@ -365,4 +416,3 @@ if __name__ == '__main__':
         print(mi, p)
 
         model(x)
-

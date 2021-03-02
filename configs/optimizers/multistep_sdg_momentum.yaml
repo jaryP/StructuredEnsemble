@@ -5,6 +5,6 @@ optimizer: sgd
 momentum: 0.9
 annealing:
   type: multi_step
-  milestones: [50, 100, 125]
-  gamma: 0.5
+  milestones: [50, 100, 150]
+  gamma: 0.8
   verbose: No

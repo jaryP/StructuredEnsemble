@@ -11,31 +11,35 @@ def perturbe_image(image, epsilon, data_grad):
 
 
 def perturbed_predictions(method, dataloder, epsilon, device):
-    images = []
-    targets = []
-    method.train()
+    if epsilon > 0:
+        images = []
+        targets = []
+        method.train()
 
-    for data, target in dataloder:
-        data, target = data.to(device), target.to(device)
-        data.requires_grad = True
+        for data, target in dataloder:
+            data, target = data.to(device), target.to(device)
+            data.requires_grad = True
 
-        p, _ = method.predict_proba(data, target, True)
+            p, _ = method.predict_proba(data, target, True)
 
-        loss = torch.nn.functional.cross_entropy(p, target)
+            loss = torch.nn.functional.cross_entropy(p, target)
 
-        method.zero_grad()
-        loss.backward()
-        data_grad = data.grad.data
+            method.zero_grad()
+            loss.backward()
+            data_grad = data.grad.data
 
-        perturbed_data = perturbe_image(data, epsilon, data_grad)
+            perturbed_data = perturbe_image(data, epsilon, data_grad)
 
-        images.extend(perturbed_data)
-        targets.extend(target)
+            images.extend(perturbed_data)
+            targets.extend(target)
 
-    images = torch.stack(images, 0)
-    targets = torch.stack(targets, 0)
+        images = torch.stack(images, 0)
+        targets = torch.stack(targets, 0)
 
-    dataset = TensorDataset(images, targets)
+        dataset = TensorDataset(images, targets)
+        dataset = DataLoader(dataset, batch_size=dataloder.batch_size)
+    else:
+        dataset = dataloder
 
     probs = []
     predictions = []
@@ -44,7 +48,7 @@ def perturbed_predictions(method, dataloder, epsilon, device):
 
     method.eval()
 
-    for x, y in DataLoader(dataset, batch_size=32):
+    for x, y in dataset:
         true.extend(y.tolist())
         p, _ = method.predict_proba(x, y, True)
 

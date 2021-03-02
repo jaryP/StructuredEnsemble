@@ -3,7 +3,7 @@ name: n5
 save_path: results/cifar10_resnet20/batch_supermask/global/weights/50/
 save: Yes
 load: Yes
-optimizer: configs/optimizers/resnet20.yaml
+optimizer: configs/optimizers/multistep_sdg_momentum.yaml
 trainer: configs/training/cifar10_resnet20.yaml
 device: 0
 method_parameters:

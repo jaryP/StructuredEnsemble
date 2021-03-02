@@ -1,6 +1,6 @@
 dataset: cifar10
 model: resnet20
-epochs: 150
+epochs: 200
 batch_size: 128
 eval: 0.1
 experiments: 1

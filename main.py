@@ -16,6 +16,7 @@ from methods.snapshot.snapshot import Snapshot
 from methods.supermask.supermask import ExtremeBatchPruningSuperMask
 from methods.supermask.supermask_after_training import \
     BatchPruningSuperMaskPostTraining
+from methods.supermask.supermask_training import BatchForwardPruningSuperMask
 from utils import get_optimizer, get_dataset, get_model, EarlyStopping, \
     ensures_path, calculate_trainable_parameters
 import yaml
@@ -158,7 +159,10 @@ for experiment in sys.argv[1:]:
                                    method_parameters=method_parameters,
                                    device=device)
         elif method_name == 'batch_supermask':
-            method = ExtremeBatchPruningSuperMask(model=model,
+            # method = ExtremeBatchPruningSuperMask(model=model,
+            #                                       method_parameters=method_parameters,
+            #                                       device=device)
+            method = BatchForwardPruningSuperMask(model=model,
                                                   method_parameters=method_parameters,
                                                   device=device)
             # method = BatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
@@ -221,7 +225,7 @@ for experiment in sys.argv[1:]:
         else:
             fgsm = {}
 
-            for e in [0.001, 0.01, 0.02, 0.1]:
+            for e in [0, 0.001, 0.01, 0.02, 0.1]:
                 true, predictions, probs, hs = \
                     perturbed_predictions(method,
                                           test_loader,
@@ -255,7 +259,7 @@ for experiment in sys.argv[1:]:
                                  'ece': ece}, file,
                                 protocol=pickle.HIGHEST_PROTOCOL)
 
-                logger.info('fgsm results saved.')
+                logger.info('corrupted results saved.')
 
         params = 0
         if hasattr(method, 'models'):

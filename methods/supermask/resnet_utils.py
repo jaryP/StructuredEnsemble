@@ -6,7 +6,7 @@ from torch.nn import BatchNorm2d
 from methods.supermask.layers import BatchEnsembleMaskedWrapper, EnsembleMaskedWrapper
 
 
-class ResNetBlockWrapper(nn.Module):
+class _ResNetBlockWrapper(nn.Module):
     def __init__(self, block, masks_params: dict, ensemble: int = 1,
                  t: int = 1, batch_ensemble=True, ):
         super().__init__()
@@ -37,6 +37,7 @@ class ResNetBlockWrapper(nn.Module):
                 self.shortcut[0] = wrapper(self.downsample[0], where='output', masks_params=masks_params,
                                              ensemble=ensemble)
 
+
     def forward(self, x):
         identity = x
 
@@ -54,6 +55,46 @@ class ResNetBlockWrapper(nn.Module):
         out = self.relu(out)
 
         return out
+
+
+class ResNetBlockWrapper(nn.Module):
+    def __init__(self, block, wrapper_fn):
+
+        super().__init__()
+
+        self.block = block
+
+        self.conv1 = wrapper_fn(block.conv1)
+
+        self.relu = nn.ReLU(inplace=True)
+        # self.conv2 = wrapper(block.conv2, where='output', masks_params=masks_params,
+        #                      ensemble=ensemble, t=t)
+        self.conv2 = self.block.conv2
+
+        self.shortcut = block.shortcut
+
+        if isinstance(self.shortcut, nn.Sequential):
+            if len(self.shortcut) > 0:
+                self.shortcut[0] = wrapper_fn(self.downsample[0])
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.block.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.block.bn2(out)
+
+        # if self.downsample is not None:
+        #     identity = self.downsample(x)
+
+        out += self.shortcut(x)
+        out = self.relu(out)
+
+        return out
+
 
 # class ResNetBottleneckWrapper(nn.Module):
 #     def __init__(self, bottleneck):
