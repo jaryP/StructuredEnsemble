@@ -23,7 +23,7 @@ class Snapshot(EnsembleMethod):
         self.resets = method_parameters.get('n_ensemble', None)
         self.epochs_per_cycle = method_parameters.get('epochs_per_cycle', None)
 
-        self.models = []
+        self.models = torch.nn.ModuleList()
         for i in range(self.resets):
             model = deepcopy(model)
             for name, module in model.named_modules():
@@ -58,25 +58,26 @@ class Snapshot(EnsembleMethod):
             self.model.load_state_dict(best_model)
             self.models[i].load_state_dict(best_model)
             all_scores.append(scores)
-
+        self.models.to(self.device)
         return all_scores
 
     def predict_logits(self, x, y, reduce):
         x, y = x.to(self.device), y.to(self.device)
+
         outputs = torch.stack([m(x) for m in self.models])
         if reduce:
             outputs = torch.mean(outputs, 0)
         return outputs
 
     def load(self, path):
-        self.device = 'cpu'
+        # self.device = 'cpu'
         for i in range(self.resets):
             state_dict = torch.load(os.path.join(path, 'model_{}.pt'.format(i)),
                                     map_location=self.device)
             m = deepcopy(self.model)
             m.load_state_dict(state_dict)
-            # m.to(self.device)
             self.models.append(m)
+        self.models.to(self.device)
 
     def save(self, path):
         for i, m in enumerate(self.models):

@@ -46,7 +46,8 @@ def eval_method(method, dataset, topk=None):
         true.extend(y.tolist())
         preds, logits = method.predict_proba(x, y, reduce=True)
 
-        loss = torch.nn.functional.cross_entropy(logits.cpu(), y, reduction='none')
+        loss = torch.nn.functional.cross_entropy(logits.cpu(), y,
+                                                 reduction='none')
         losses.extend(loss.tolist())
 
         # preds = method.predict_proba(x, y)

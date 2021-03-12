@@ -61,7 +61,8 @@ class BatchEnsemble(EnsembleMethod):
         return outputs
 
     def load(self, path):
-        state_dict = torch.load(os.path.join(path, 'model.pt'), map_location=self.device)
+        state_dict = torch.load(os.path.join(path, 'model.pt'),
+                                map_location=self.device)
         self.model.load_state_dict(state_dict)
         self.model.to(self.device)
 

@@ -545,8 +545,9 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
                 # m = pickle.load(file)
                 m = torch.load(os.path.join(path, 'model_{}.pt'.format(i)),
                                map_location=self.device)
-            m.to(self.device)
+            # m.to(self.device)
             self.models.append(m)
+        self.models.to(self.device)
 
     def save(self, path):
         for i, m in enumerate(self.models):

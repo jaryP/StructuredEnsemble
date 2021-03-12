@@ -1,6 +1,7 @@
 import os
 import pickle
 import sys
+from typing import Union
 
 import numpy as np
 import torch
@@ -21,12 +22,24 @@ from utils import get_optimizer, get_dataset, get_model, EarlyStopping, \
     ensures_path, calculate_trainable_parameters
 import yaml
 import logging
+import argparse
 
-# TODO: implemetare attacco
+parser = argparse.ArgumentParser(description='Process some integers.')
 
-# TODO: implementare linear layers BE
+parser.add_argument('files', metavar='N', type=str, nargs='+',
+                    help='Paths of the yaml con figuration files')
 
-for experiment in sys.argv[1:]:
+parser.add_argument('--device',
+                    required=False,
+                    default=None,
+                    type=int,
+                    help='sum the integers (default: find the max)')
+
+args = parser.parse_args()
+print(args)
+
+
+for experiment in args.files:
 
     with open(experiment, 'r') as stream:
         experiment_config = yaml.safe_load(stream)
@@ -45,7 +58,11 @@ for experiment in sys.argv[1:]:
 
     optimizer, regularization, scheduler = get_optimizer(**optimizer_config)
 
-    device = experiment_config.get('device', 'cpu')
+    if args.device is not None:
+        device = args.device
+    else:
+        device = experiment_config.get('device', 'cpu')
+
     if torch.cuda.is_available() and device != 'cpu':
         torch.cuda.set_device(device)
         device = 'cuda:{}'.format(device)
@@ -224,12 +241,13 @@ for experiment in sys.argv[1:]:
             logger.info('fgsm results loaded.')
         else:
             fgsm = {}
-
-            for e in [0, 0.001, 0.01, 0.02, 0.1]:
+            
+            for e in [0, 0.001, 0.01, 0.02, 0.1, 0.5]:
                 true, predictions, probs, hs = \
                     perturbed_predictions(method,
                                           test_loader,
-                                          epsilon=e, device=device)
+                                          epsilon=e, device=method.device)
+
                 fgsm[e] = {'true': true, 'predictions': predictions,
                            'probs': probs, 'entropy': hs}
 
@@ -237,22 +255,43 @@ for experiment in sys.argv[1:]:
                 pickle.dump(fgsm, file, protocol=pickle.HIGHEST_PROTOCOL)
             logger.info('fgsm results saved.')
 
+        for e, v in fgsm.items():
+            true, predictions, probs, hs = v['true'], \
+                                           v['predictions'], \
+                                           v['probs'], \
+                                           v['entropy']
+
+            logger.info('FGSM. Epsilon {}'.format(e))
+            cph = [h for i, h in enumerate(hs) if true[i] == predictions[i]]
+            wph = [h for i, h in enumerate(hs) if true[i] != predictions[i]]
+            logger.info('\tCorrectly classified entropy: {} (+-{}) # {} \n\t'
+                        'Wrongly classified entropy: {} (+-{}) # {}'.format(
+                        np.mean(cph),
+                        np.std(cph),
+                        len(cph),
+                        np.mean(wph),
+                        np.std(wph),
+                        len(wph)))
+
         if trainer['dataset'] in ['cifar10', 'cifar100']:
-            if to_load and os.path.exists(os.path.join(seed_path, 'corrupted.pkl')):
-                with open(os.path.join(seed_path, 'corrupted.pkl'), 'rb') as file:
-                    fgsm = pickle.load(file)
+            if to_load and os.path.exists(
+                    os.path.join(seed_path, 'corrupted.pkl')):
+                with open(os.path.join(seed_path, 'corrupted.pkl'),
+                          'rb') as file:
+                    corrupted = pickle.load(file)
 
                 logger.info('corrupted cifar results loaded.')
 
             else:
 
                 entropy, scores, buc, ece = corrupted_cifar_uncertainty(method,
-                                                                        batch_size*2,
+                                                                        batch_size * 2,
                                                                         dataset=
                                                                         trainer[
                                                                             'dataset'])
 
-                with open(os.path.join(seed_path, 'corrupted.pkl'), 'wb') as file:
+                with open(os.path.join(seed_path, 'corrupted.pkl'),
+                          'wb') as file:
                     pickle.dump({'entropy': entropy,
                                  'scores': scores,
                                  'buc': buc,

@@ -48,7 +48,7 @@ class Naive(EnsembleMethod):
             model.to('cpu')
             all_scores.append(scores)
 
-        self.device = 'cpu'
+        # self.device = 'cpu'
 
         return all_scores
 
@@ -60,13 +60,14 @@ class Naive(EnsembleMethod):
         return outputs
 
     def load(self, path):
-        self.device = 'cpu'
+        # self.device = 'cpu'
         for i in range(self.ensemble):
             state_dict = torch.load(os.path.join(path, 'model_{}.pt'.format(i)), map_location=self.device)
             m = deepcopy(self.model)
             m.load_state_dict(state_dict)
             # m.to(self.device)
             self.models.append(m)
+        self.models.to(self.device)
 
     def save(self, path):
         for i, m in enumerate(self.models):

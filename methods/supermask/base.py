@@ -162,7 +162,8 @@ def be_model_training(model, optimizer, train_loader, epochs, scheduler, early_s
         d = torch.tensor(0.0, device=device)
 
         for name, module in model.named_modules():
-            if isinstance(module, (EnsembleMaskedWrapper, BatchEnsembleMaskedWrapper)):
+            if isinstance(module, (EnsembleMaskedWrapper,
+                                   BatchEnsembleMaskedWrapper)):
                 distr = module.distributions
                 for i, d1 in enumerate(distr):
                     for j, d2 in enumerate(distr):

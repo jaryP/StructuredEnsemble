@@ -532,7 +532,7 @@ class TrainingMasking(autograd.Function):
 
     @staticmethod
     def forward(ctx, scores, k) -> Any:
-        threshold = torch.quantile(scores, q=k)
+        threshold = torch.quantile(scores.abs(), q=k)
         mask = torch.ge(scores, threshold).float()
 
         return mask

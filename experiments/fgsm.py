@@ -2,6 +2,8 @@ import numpy as np
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 
+from experiments.corrupted_cifar import epistemic_aleatoric_uncertainty
+
 
 def perturbe_image(image, epsilon, data_grad):
     sign_data_grad = data_grad.sign()
@@ -54,6 +56,11 @@ def perturbed_predictions(method, dataloder, epsilon, device):
 
         plog = p.log()
         h = -torch.sum(plog * p, -1)
+
+        # h, _ = epistemic_aleatoric_uncertainty(
+        # method.predict_logits(x, y, False)
+        #                                        .detach().numpy())
+
         hs.extend(h.tolist())
 
         probs.extend(p.tolist())

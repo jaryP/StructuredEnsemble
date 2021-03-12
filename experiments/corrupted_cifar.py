@@ -9,8 +9,8 @@ from torchvision.datasets.utils import download_and_extract_archive
 import numpy as np
 from torchvision.transforms import transforms
 
-from calibration import ece_score
 from eval import get_logits, eval_method
+from experiments.calibration import ece_score
 
 BENCHMARK_CORRUPTIONS = [
     'gaussian_noise',
