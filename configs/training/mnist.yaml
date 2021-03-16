@@ -1,6 +1,6 @@
 dataset: mnist
 model: lenet-5
-epochs: 5
+epochs: 1
 batch_size: 64
 eval: 0.1
 experiments: 2

@@ -263,7 +263,8 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
                 scheduler.step()
 
         if eval_loader is not None:
-            eval_scores, _ = eval_model(model, eval_loader, topk=[1, 5], device=device)
+            eval_scores, _ = eval_model(model, eval_loader, topk=[1, 5],
+                                        device=device)
         else:
             eval_scores = 0
 
@@ -271,7 +272,8 @@ def train_model(model, optimizer, train_loader, epochs, scheduler, early_stoppin
         mean_losses.append(mean_loss)
 
         if early_stopping is not None:
-            r = early_stopping.step(eval_scores[1]) if eval_loader is not None else early_stopping.step(mean_loss)
+            r = early_stopping.step(eval_scores[1]) if eval_loader is not None \
+                else early_stopping.step(mean_loss)
 
             if r < 0:
                 break

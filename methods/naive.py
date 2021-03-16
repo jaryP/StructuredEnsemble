@@ -45,7 +45,7 @@ class Naive(EnsembleMethod):
                                                                         device=self.device)
 
             model.load_state_dict(best_model)
-            model.to('cpu')
+            # model.to('cpu')
             all_scores.append(scores)
 
         # self.device = 'cpu'
@@ -67,6 +67,7 @@ class Naive(EnsembleMethod):
             m.load_state_dict(state_dict)
             # m.to(self.device)
             self.models.append(m)
+
         self.models.to(self.device)
 
     def save(self, path):

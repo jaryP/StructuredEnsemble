@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import torch
 
+from eval import eval_method, eval_model
 from methods.batch_ensemble.layers import layer_to_masked
 from methods.base import EnsembleMethod
 from utils import train_model
@@ -53,18 +54,19 @@ class BatchEnsemble(EnsembleMethod):
     def predict_logits(self, x, y, reduce):
         x, y = x.to(self.device), y.to(self.device)
         bs = x.shape[0]
-        x = torch.stack([x for _ in range(self.ensemble)], dim=1)
+        x = torch.cat([x for _ in range(self.ensemble)], dim=0)
         outputs = self.model(x)
-        outputs = outputs.view([bs, self.ensemble, -1])
+        outputs = torch.split(outputs, bs)
+        outputs = torch.stack(outputs, 1)
         if reduce:
             outputs = torch.mean(outputs, 1)
         return outputs
 
     def load(self, path):
-        state_dict = torch.load(os.path.join(path, 'model.pt'),
+        self.model = torch.load(os.path.join(path, 'model.pt'),
                                 map_location=self.device)
-        self.model.load_state_dict(state_dict)
+        # self.model.load_state_dict(state_dict)
         self.model.to(self.device)
 
     def save(self, path):
-        torch.save(self.model.state_dict(), os.path.join(path, 'model.pt'))
+        torch.save(self.model, os.path.join(path, 'model.pt'))

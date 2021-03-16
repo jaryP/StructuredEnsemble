@@ -1,7 +1,6 @@
 import os
 import pickle
 import sys
-from typing import Union
 
 import numpy as np
 import torch
@@ -14,10 +13,10 @@ from methods import SingleModel, Naive, SuperMask
 from methods.batch_ensemble.batch_ensemble import BatchEnsemble
 from methods.dropout.dropout import MCDropout
 from methods.snapshot.snapshot import Snapshot
-from methods.supermask.supermask import ExtremeBatchPruningSuperMask
 from methods.supermask.supermask_after_training import \
     BatchPruningSuperMaskPostTraining
-from methods.supermask.supermask_training import BatchForwardPruningSuperMask
+from methods.supermask.supermask_training import BatchForwardPruningSuperMask, \
+    ExtremeBatchPruningSuperMask
 from utils import get_optimizer, get_dataset, get_model, EarlyStopping, \
     ensures_path, calculate_trainable_parameters
 import yaml
@@ -36,8 +35,6 @@ parser.add_argument('--device',
                     help='sum the integers (default: find the max)')
 
 args = parser.parse_args()
-print(args)
-
 
 for experiment in args.files:
 
@@ -112,7 +109,11 @@ for experiment in args.files:
 
         already_present = ensures_path(seed_path)
 
-        hs = [logging.StreamHandler(sys.stdout)]
+        hs = [
+              logging.StreamHandler(sys.stdout),
+              # logging.StreamHandler(sys.stderr)
+              ]
+
         hs.append(
             logging.FileHandler(os.path.join(seed_path, 'info.log'), mode='w'))
 
@@ -176,12 +177,12 @@ for experiment in args.files:
                                    method_parameters=method_parameters,
                                    device=device)
         elif method_name == 'batch_supermask':
-            # method = ExtremeBatchPruningSuperMask(model=model,
-            #                                       method_parameters=method_parameters,
-            #                                       device=device)
-            method = BatchForwardPruningSuperMask(model=model,
+            method = ExtremeBatchPruningSuperMask(model=model,
                                                   method_parameters=method_parameters,
                                                   device=device)
+            # method = BatchForwardPruningSuperMask(model=model,
+            #                                       method_parameters=method_parameters,
+            #                                       device=device)
             # method = BatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
         elif method_name == 'grad_supermask_post':
             method = BatchPruningSuperMaskPostTraining(model=model,
@@ -232,7 +233,7 @@ for experiment in args.files:
 
         logger.info('Ensemble '
                     'score on test: {}'.format(
-            eval_method(method, dataset=test_loader)[0]))
+            eval_method(method, dataset=train_loader)[0]))
 
         if to_load and os.path.exists(os.path.join(seed_path, 'fgsm.pkl')):
             with open(os.path.join(seed_path, 'fgsm.pkl'), 'rb') as file:

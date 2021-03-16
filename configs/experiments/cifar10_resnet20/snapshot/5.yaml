@@ -1,0 +1,11 @@
+method: snapshot
+name: n5
+save_path: results/cifar10_resnet20/snapshot
+load: Yes
+save: Yes
+optimizer: configs/optimizers/multistep_sdg_momentum.yaml
+trainer: configs/training/cifar10_resnet20.yaml
+device: 0
+method_parameters:
+  n_ensemble: 5
+  epochs_per_cycle: 50
