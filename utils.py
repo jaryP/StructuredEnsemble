@@ -6,7 +6,7 @@ import torchvision
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import StepLR, MultiStepLR
-from torchvision.models import vgg11, resnet18
+from torchvision.models import vgg11, resnet18, AlexNet
 from torchvision.transforms import transforms
 from tqdm import tqdm
 
@@ -58,39 +58,46 @@ def ensures_path(path):
 def get_model(name, input_size=None, output=None):
     name = name.lower()
     if name == 'lenet-300-100':
-        return LeNet_300_100(input_size, output)
+        model = LeNet_300_100(input_size, output)
     elif name == 'lenet-5':
-        return LeNet(input_size, output)
+        model = LeNet(input_size, output)
     elif 'vgg' in name:
         # if 'bn' in name:
         if name == 'vgg11':
-            vgg = vgg11(pretrained=False, num_classes=output)
+            model = vgg11(pretrained=False, num_classes=output)
         else:
             assert False
 
-        for n, m in vgg.named_modules():
+        for n, m in model.named_modules():
             if hasattr(m, 'bias') and not isinstance(m, _BatchNorm):
                 if m.bias is not None:
                     if m.bias.sum() == 0:
                         m.bias = None
 
-        return vgg
+    elif 'alexnet' in name:
+        model = AlexNet(num_classes=output)
 
+        for n, m in model.named_modules():
+            if hasattr(m, 'bias') and not isinstance(m, _BatchNorm):
+                if m.bias is not None:
+                    if m.bias.sum() == 0:
+                        m.bias = None
     elif 'resnet' in name:
         if name == 'resnet20':
-            resnet = resnet20(num_classes=output)
+            model = resnet20(num_classes=output)
         else:
             assert False
 
-        for n, m in resnet.named_modules():
+        for n, m in model.named_modules():
             if hasattr(m, 'bias') and not isinstance(m, _BatchNorm):
                 if m.bias is not None:
                     if m.bias.sum() == 0:
                         m.bias = None
 
-        return resnet
     else:
         assert False
+
+    return model
 
 
 def get_dataset(name, model_name):
@@ -144,6 +151,32 @@ def get_dataset(name, model_name):
         classes = 10
         input_size = 28 * 28
 
+    elif name == 'svhn':
+        tt = [
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4376821, 0.4437697, 0.47280442), (0.19803012, 0.20101562, 0.19703614))]
+
+        t = [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4376821, 0.4437697, 0.47280442), (0.19803012, 0.20101562, 0.19703614))]
+
+        # if 'resnet' in model_name:
+        #     tt = [transforms.Resize(256), transforms.CenterCrop(224)] + tt
+        #     t = [transforms.Resize(256), transforms.CenterCrop(224)] + t
+
+        transform = transforms.Compose(t)
+        train_transform = transforms.Compose(tt)
+
+        train_set = torchvision.datasets.SVHN(
+            root='./datasets/svhn', split='train', download=True, transform=train_transform)
+
+        test_set = torchvision.datasets.SVHN(
+            root='./datasets/svhn', split='test', download=True, transform=transform)
+
+        input_size, classes = 3, 10
+
     elif name == 'cifar10':
         tt = [
             transforms.RandomCrop(32, padding=4),
@@ -155,10 +188,6 @@ def get_dataset(name, model_name):
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
 
-        # if 'resnet' in model_name:
-        #     tt = [transforms.Resize(256), transforms.CenterCrop(224)] + tt
-        #     t = [transforms.Resize(256), transforms.CenterCrop(224)] + t
-
         transform = transforms.Compose(t)
         train_transform = transforms.Compose(tt)
 
@@ -167,6 +196,28 @@ def get_dataset(name, model_name):
 
         test_set = torchvision.datasets.CIFAR10(
             root='./datasets/cifar10', train=False, download=True, transform=transform)
+
+        input_size, classes = 3, 10
+
+    elif name == 'cifar100':
+        tt = [
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
+
+        t = [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
+
+        transform = transforms.Compose(t)
+        train_transform = transforms.Compose(tt)
+
+        train_set = torchvision.datasets.CIFAR100(
+            root='./datasets/cifar100', train=True, download=True, transform=train_transform)
+
+        test_set = torchvision.datasets.CIFAR100(
+            root='./datasets/cifar100', train=False, download=True, transform=transform)
 
         input_size, classes = 3, 10
 

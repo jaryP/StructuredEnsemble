@@ -64,9 +64,9 @@ class Snapshot(EnsembleMethod):
     def predict_logits(self, x, y, reduce):
         x, y = x.to(self.device), y.to(self.device)
 
-        outputs = torch.stack([m(x) for m in self.models])
+        outputs = torch.stack([m(x) for m in self.models], 1)
         if reduce:
-            outputs = torch.mean(outputs, 0)
+            outputs = torch.mean(outputs, 1)
         return outputs
 
     def load(self, path):

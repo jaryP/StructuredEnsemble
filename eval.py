@@ -101,11 +101,17 @@ def get_logits(method, dataset):
 
         p = torch.mean(p, 1)
         pred = torch.argmax(p, -1)
-        predictions.extend(pred.tolist())
+        if isinstance(pred, int):
+            predictions.append(pred)
+        else:
+            predictions.extend(pred.tolist())
+
+        break
 
     true = np.asarray(true)
     predictions = np.asarray(predictions)
-    probs = np.stack(probs, 0)
+    probs = np.stack(probs, 1)
+    # probs = np.asarray(probs)
 
     return probs, true, predictions
 

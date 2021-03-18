@@ -504,7 +504,7 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
                     self.model = model
 
                 p = calculate_trainable_parameters(model)
-                print(mi, last_iteration, p, calculate_trainable_parameters(self.model))
+                print(mi, last_iteration, p, calculate_trainable_parameters(model))
 
         all_scores = []
 
