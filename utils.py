@@ -6,7 +6,7 @@ import torchvision
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.optim import Adam, SGD
 from torch.optim.lr_scheduler import StepLR, MultiStepLR
-from torchvision.models import vgg11, resnet18, AlexNet
+from torchvision.models import vgg11, AlexNet
 from torchvision.transforms import transforms
 from tqdm import tqdm
 
@@ -219,9 +219,10 @@ def get_dataset(name, model_name):
         test_set = torchvision.datasets.CIFAR100(
             root='./datasets/cifar100', train=False, download=True, transform=transform)
 
-        input_size, classes = 3, 10
+        input_size, classes = 3, 100
 
     else:
+        print(name)
         assert False
 
     return train_set, test_set, input_size, classes

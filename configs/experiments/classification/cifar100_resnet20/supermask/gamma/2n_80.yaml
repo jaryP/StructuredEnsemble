@@ -1,0 +1,31 @@
+method: supermask
+name: n2_80
+save_path: results/cifar100_vgg11/supermask/gamma/
+save: Yes
+load: Yes
+optimizer: configs/optimizers/multistep_sdg_momentum.yaml
+trainer: configs/training/cifar100_vgg11.yaml
+device: 0
+method_parameters:
+  t: 1
+  iterative_training: Yes
+  divergence: mmd
+  divergence_w: 0.001
+  prune_percentage: 0.8
+  global_pruning: Yes
+  re_init: No
+  mask_epochs: 5
+  n_ensemble: 2
+  supermask:
+    name: gamma
+    initialization:
+      a:
+        name: constant
+        c: 1
+        high: 1
+        low: 0
+      b:
+        name: constant
+        c: 2
+        high: 1
+        low: 0

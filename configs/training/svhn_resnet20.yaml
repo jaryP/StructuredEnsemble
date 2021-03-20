@@ -1,0 +1,10 @@
+dataset: svhn
+model: resnet20
+epochs: 50
+batch_size: 128
+eval: 0.1
+experiments: 2
+early_stopping:
+  tolerance: 20
+  value: eval
+

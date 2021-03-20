@@ -1,0 +1,8 @@
+method: naive
+name: exp1
+save_path: results/cl/cifar10/naive
+load: Yes
+save: Yes
+optimizer: configs/optimizers/adam.yaml
+trainer: configs/training/cl/cifar10.yaml
+device: cpu

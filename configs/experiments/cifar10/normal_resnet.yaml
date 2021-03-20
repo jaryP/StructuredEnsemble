@@ -1,8 +1,0 @@
-method: normal
-name: normal
-save_path: results/cifar10_resnet/single
-load: Yes
-save: Yes
-optimizer: configs/optimizers/resnet.yaml
-trainer: configs/training/cifar10_resnet.yaml
-device: 0

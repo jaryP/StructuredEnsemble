@@ -1,0 +1,8 @@
+method: normal
+name: normal
+save_path: results/svhn_resnet20/normal
+load: Yes
+save: Yes
+optimizer: configs/optimizers/multistep_sdg_momentum.yaml
+trainer: configs/training/svhn_resnet20.yaml
+device: 0

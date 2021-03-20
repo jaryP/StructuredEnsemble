@@ -200,10 +200,10 @@ class CorruptedCifar100(CorruptedCifar10):
         return os.path.join(self.folder, 'CIFAR-100-C')
 
 
-def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False, dataset='cifar10'):
-    assert dataset in ['cifar100', 'cifar10']
+def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False, dataset='cifar10_vgg11'):
+    assert dataset in ['cifar100', 'cifar10_vgg11']
 
-    if dataset == 'cifar10':
+    if dataset == 'cifar10_vgg11':
         dataset = CorruptedCifar10
         t = [transforms.ToTensor(),
              transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]

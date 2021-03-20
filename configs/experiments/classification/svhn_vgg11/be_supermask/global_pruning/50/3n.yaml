@@ -1,0 +1,24 @@
+method: batch_supermask
+name: n3
+save_path: results/svhn_vgg11/batch_supermask/global/weights/50/
+save: Yes
+load: Yes
+optimizer: configs/optimizers/multistep_sdg_momentum.yaml
+trainer: configs/training/svhn_vgg11.yaml
+device: 0
+method_parameters:
+  t: 1
+  iterative_training: Yes
+  divergence: mmd
+  divergence_w: 0.01
+  prune_percentage: 0.50
+  global_pruning: Yes
+  re_init: No
+  mask_epochs: 10
+  n_ensemble: 3
+  supermask:
+    name: weights
+    initialization:
+      name: normal
+      mu: 0
+      std: 1

@@ -233,7 +233,7 @@ for experiment in args.files:
 
         logger.info('Ensemble '
                     'score on test: {}'.format(
-            eval_method(method, dataset=train_loader)[0]))
+            eval_method(method, dataset=test_loader)[0]))
 
         if to_load and os.path.exists(os.path.join(seed_path, 'fgsm.pkl')):
             with open(os.path.join(seed_path, 'fgsm.pkl'), 'rb') as file:
@@ -274,32 +274,32 @@ for experiment in args.files:
                         np.std(wph),
                         len(wph)))
 
-        if trainer['dataset'] in ['cifar10', 'cifar100']:
-            if to_load and os.path.exists(
-                    os.path.join(seed_path, 'corrupted.pkl')):
-                with open(os.path.join(seed_path, 'corrupted.pkl'),
-                          'rb') as file:
-                    corrupted = pickle.load(file)
-
-                logger.info('corrupted cifar results loaded.')
-
-            else:
-
-                entropy, scores, buc, ece = corrupted_cifar_uncertainty(method,
-                                                                        batch_size * 2,
-                                                                        dataset=
-                                                                        trainer[
-                                                                            'dataset'])
-
-                with open(os.path.join(seed_path, 'corrupted.pkl'),
-                          'wb') as file:
-                    pickle.dump({'entropy': entropy,
-                                 'scores': scores,
-                                 'buc': buc,
-                                 'ece': ece}, file,
-                                protocol=pickle.HIGHEST_PROTOCOL)
-
-                logger.info('corrupted results saved.')
+        # if trainer['dataset'] in ['cifar10_vgg11', 'cifar100']:
+        #     if to_load and os.path.exists(
+        #             os.path.join(seed_path, 'corrupted.pkl')):
+        #         with open(os.path.join(seed_path, 'corrupted.pkl'),
+        #                   'rb') as file:
+        #             corrupted = pickle.load(file)
+        #
+        #         logger.info('corrupted cifar results loaded.')
+        #
+        #     else:
+        #
+        #         entropy, scores, buc, ece = corrupted_cifar_uncertainty(method,
+        #                                                                 batch_size * 2,
+        #                                                                 dataset=
+        #                                                                 trainer[
+        #                                                                     'dataset'])
+        #
+        #         with open(os.path.join(seed_path, 'corrupted.pkl'),
+        #                   'wb') as file:
+        #             pickle.dump({'entropy': entropy,
+        #                          'scores': scores,
+        #                          'buc': buc,
+        #                          'ece': ece}, file,
+        #                         protocol=pickle.HIGHEST_PROTOCOL)
+        #
+        #         logger.info('corrupted results saved.')
 
         params = 0
         if hasattr(method, 'models'):

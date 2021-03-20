@@ -2,6 +2,7 @@ import os
 import warnings
 from copy import deepcopy
 
+import dill
 import torch
 
 from eval import eval_method, eval_model
@@ -63,10 +64,11 @@ class BatchEnsemble(EnsembleMethod):
         return outputs
 
     def load(self, path):
-        self.model = torch.load(os.path.join(path, 'model.pt'),
+        state_dict = torch.load(os.path.join(path, 'model.pt'),
                                 map_location=self.device)
-        # self.model.load_state_dict(state_dict)
+        self.model.load_state_dict(state_dict)
         self.model.to(self.device)
 
     def save(self, path):
-        torch.save(self.model, os.path.join(path, 'model.pt'))
+        torch.save(self.model.state_dict(), os.path.join(path, 'model.pt'))
+        # dill.dump(self.model, os.path.join(path, 'model.pt'))
