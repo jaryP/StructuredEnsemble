@@ -1,0 +1,8 @@
+method: batch_ensemble
+name: batch_ensemble
+save_path: results/cl/tiny_imagenet/
+load: Yes
+save: Yes
+optimizer: configs/optimizers/multistep_sdg_momentum.yaml
+trainer: configs/training/cl/tiny_imagenet.yaml
+device: 0

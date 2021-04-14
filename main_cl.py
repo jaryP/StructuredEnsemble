@@ -44,6 +44,7 @@ parser.add_argument('--device',
 args = parser.parse_args()
 
 for experiment in args.files:
+    print(experiment)
 
     with open(experiment, 'r') as stream:
         experiment_config = yaml.safe_load(stream)
@@ -160,10 +161,7 @@ for experiment in args.files:
                                    backbone=backbone,
                                    device=device,
                                    parameters=experiment_config.get(
-                                       'parameters'))
-
-            method_parameters = dict(
-                experiment_config.get('method_parameters', {}))
+                                       'parameters', dict()))
 
             t = GgTrainer(backbone=backbone,
                           batch_size=batch_size,
@@ -188,165 +186,10 @@ for experiment in args.files:
                     dill.dump(evaluator, file,
                               protocol=pickle.HIGHEST_PROTOCOL)
 
+                with open(os.path.join(seed_path, 'method.pkl'), 'wb') as file:
+                    dill.dump(method, file,
+                              protocol=pickle.HIGHEST_PROTOCOL)
+
         logger.info(evaluator.task_matrix)
         logger.info(evaluator.cl_results())
         logger.info(evaluator.others_metrics_results())
-
-        # model = get_model(name=trainer['model'], input_size=input_size,
-        #                   output=classes)
-        #
-        # logger.info('Base model parameters: {}'.format(
-        #     calculate_trainable_parameters(model)))
-        #
-        # if method_name is None or method_name == 'normal':
-        #     method_name = 'normal'
-        #     method = SingleModel(model=model, device=device)
-        # elif method_name == 'naive':
-        #     method = Naive(model=model, device=device,
-        #                    method_parameters=method_parameters)
-        # elif method_name == 'supermask':
-        #     method = SuperMask(model=model, method_parameters=method_parameters,
-        #                        device=device)
-        # elif method_name == 'batch_ensemble':
-        #     method = BatchEnsemble(model=model,
-        #                            method_parameters=method_parameters,
-        #                            device=device)
-        # elif method_name == 'batch_supermask':
-        #     method = ExtremeBatchPruningSuperMask(model=model,
-        #                                           method_parameters=method_parameters,
-        #                                           device=device)
-        #     # method = BatchForwardPruningSuperMask(model=model,
-        #     #                                       method_parameters=method_parameters,
-        #     #                                       device=device)
-        #     # method = BatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
-        # elif method_name == 'grad_supermask_post':
-        #     method = BatchPruningSuperMaskPostTraining(model=model,
-        #                                                method_parameters=
-        #                                                method_parameters,
-        #                                                device=device)
-        # # elif method_name == 'reverse_supermask':
-        # # method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
-        # # elif method_name == 'grad_supermask':
-        # # method = GradSuperMask(model=model, method_parameters=method_parameters, device=device)
-        # # elif method_name == 'tree_supermask':
-        # # method = TreeSuperMask(model=model, method_parameters=method_parameters, device=device)
-        # elif method_name == 'mc_dropout':
-        #     method = MCDropout(model=model, method_parameters=method_parameters,
-        #                        device=device)
-        # elif method_name == 'snapshot':
-        #     method = Snapshot(model=model, method_parameters=method_parameters,
-        #                       device=device)
-        # else:
-        #     assert False
-        #
-        # logger.info('Method used: {}'.format(method_name))
-        #
-        # if to_load and os.path.exists(os.path.join(seed_path, 'results.pkl')):
-        #     method.load(os.path.join(seed_path))
-        #     with open(os.path.join(seed_path, 'results.pkl'), 'rb') as file:
-        #         results = pickle.load(file)
-        #     logger.info('Results and models loaded.')
-        # else:
-        #     results = method.train_models(optimizer=optimizer,
-        #                                   train_dataset=train_loader,
-        #                                   epochs=epochs,
-        #                                   scheduler=scheduler,
-        #                                   early_stopping=early_stopping,
-        #                                   test_dataset=test_loader,
-        #                                   eval_dataset=eval_loader)
-        #
-        #     if to_save:
-        #         method.save(seed_path)
-        #         with open(os.path.join(seed_path, 'results.pkl'), 'wb') as file:
-        #             pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
-        #         logger.info('Results and models saved.')
-        #
-        # # logger.info('Ensemble score on train: {}'.format(eval_method(method,
-        # # dataset=train_loader)[0]))
-        # # logger.info('Ensemble score on eval: {}'.format(eval_method(method,
-        # # dataset=eval_loader)[0]))
-        #
-        # logger.info('Ensemble '
-        #             'score on test: {}'.format(
-        #     eval_method(method, dataset=test_loader)[0]))
-        #
-        # if to_load and os.path.exists(os.path.join(seed_path, 'fgsm.pkl')):
-        #     with open(os.path.join(seed_path, 'fgsm.pkl'), 'rb') as file:
-        #         fgsm = pickle.load(file)
-        #
-        #     logger.info('fgsm results loaded.')
-        # else:
-        #     fgsm = {}
-        #
-        #     for e in [0, 0.001, 0.01, 0.02, 0.1, 0.5]:
-        #         true, predictions, probs, hs = \
-        #             perturbed_predictions(method,
-        #                                   test_loader,
-        #                                   epsilon=e, device=method.device)
-        #
-        #         fgsm[e] = {'true': true, 'predictions': predictions,
-        #                    'probs': probs, 'entropy': hs}
-        #
-        #     with open(os.path.join(seed_path, 'fgsm.pkl'), 'wb') as file:
-        #         pickle.dump(fgsm, file, protocol=pickle.HIGHEST_PROTOCOL)
-        #     logger.info('fgsm results saved.')
-        #
-        # for e, v in fgsm.items():
-        #     true, predictions, probs, hs = v['true'], \
-        #                                    v['predictions'], \
-        #                                    v['probs'], \
-        #                                    v['entropy']
-        #
-        #     logger.info('FGSM. Epsilon {}'.format(e))
-        #     cph = [h for i, h in enumerate(hs) if true[i] == predictions[i]]
-        #     wph = [h for i, h in enumerate(hs) if true[i] != predictions[i]]
-        #     logger.info('\tCorrectly classified entropy: {} (+-{}) # {} \n\t'
-        #                 'Wrongly classified entropy: {} (+-{}) # {}'.format(
-        #         np.mean(cph),
-        #         np.std(cph),
-        #         len(cph),
-        #         np.mean(wph),
-        #         np.std(wph),
-        #         len(wph)))
-        #
-        # # if trainer['dataset'] in ['cifar10_vgg11', 'cifar100']:
-        # #     if to_load and os.path.exists(
-        # #             os.path.join(seed_path, 'corrupted.pkl')):
-        # #         with open(os.path.join(seed_path, 'corrupted.pkl'),
-        # #                   'rb') as file:
-        # #             corrupted = pickle.load(file)
-        # #
-        # #         logger.info('corrupted cifar results loaded.')
-        # #
-        # #     else:
-        # #
-        # #         entropy, scores, buc, ece = corrupted_cifar_uncertainty(method,
-        # #                                                                 batch_size * 2,
-        # #                                                                 dataset=
-        # #                                                                 trainer[
-        # #                                                                     'dataset'])
-        # #
-        # #         with open(os.path.join(seed_path, 'corrupted.pkl'),
-        # #                   'wb') as file:
-        # #             pickle.dump({'entropy': entropy,
-        # #                          'scores': scores,
-        # #                          'buc': buc,
-        # #                          'ece': ece}, file,
-        # #                         protocol=pickle.HIGHEST_PROTOCOL)
-        # #
-        # #         logger.info('corrupted results saved.')
-        #
-        # params = 0
-        # if hasattr(method, 'models'):
-        #     models = method.models
-        # else:
-        #     models = [method.model]
-        #
-        # for m in models:
-        #     params += calculate_trainable_parameters(m)
-        #
-        # logger.info('Method {} has {} parameters'.format(method_name, params))
-        #
-        # ece, _, _, _ = ece_score(method, test_loader)
-        #
-        # logger.info('Ece score: {}'.format(ece))

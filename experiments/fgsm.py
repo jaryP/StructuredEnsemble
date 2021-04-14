@@ -12,7 +12,7 @@ def perturbe_image(image, epsilon, data_grad):
     return perturbed_image
 
 
-def perturbed_predictions(method, dataloder, epsilon, device):
+def perturbed_predictions(method, dataloder, epsilon, device, normalize=False):
     if epsilon > 0:
         images = []
         targets = []
@@ -54,8 +54,11 @@ def perturbed_predictions(method, dataloder, epsilon, device):
         true.extend(y.tolist())
         p, _ = method.predict_proba(x, y, True)
 
-        plog = p.log()
-        h = -torch.sum(plog * p, -1)
+        plog = (p + 1e-12).log()
+        h = plog * p
+        if normalize:
+            h = h / np.log(h.shape[-1])
+        h = -torch.sum(h, -1)
 
         # h, _ = epistemic_aleatoric_uncertainty(
         # method.predict_logits(x, y, False)

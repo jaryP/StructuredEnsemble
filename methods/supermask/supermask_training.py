@@ -522,9 +522,9 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
         # self.device = 'cpu'
         for i in range(self.ensemble):
             with open(os.path.join(path, 'model_{}.pt'.format(i)), 'rb') as file:
-                # m = pickle.load(file)
-                m = torch.load(os.path.join(path, 'model_{}.pt'.format(i)),
-                               map_location=self.device)
+                m = pickle.load(file)
+                # m = torch.load(os.path.join(path, 'model_{}.pt'.format(i)),
+                #                map_location=self.device)
             m.to(self.device)
             self.models.append(m)
 
@@ -532,4 +532,4 @@ class ExtremeBatchPruningSuperMask(EnsembleMethod):
         for i, m in enumerate(self.models):
             with open(os.path.join(path, 'model_{}.pt'.format(i)), 'wb') as file:
                 pickle.dump(m, file)
-            # torch.save(m, os.path.join(path, 'model_{}.pt'.format(i)))
+                # torch.save(m, os.path.join(path, 'model_{}.pt'.format(i)))

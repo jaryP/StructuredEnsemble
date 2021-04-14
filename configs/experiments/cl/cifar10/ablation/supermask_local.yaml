@@ -1,0 +1,12 @@
+method: supermask
+name: local
+save_path: results/cl/cifar10/supermask
+load: Yes
+save: Yes
+optimizer: configs/optimizers/adam.yaml
+trainer: configs/training/cl/cifar10.yaml
+device: 0
+parameters:
+  mask_epochs: 10
+  global_pruning: No
+  pruning_percentage: 0.5

@@ -1,0 +1,10 @@
+method: pruning
+name: pruning1
+save_path: results/cl/tiny_imagenet/
+load: Yes
+save: Yes
+optimizer: configs/optimizers/l2_adam.yaml
+trainer: configs/training/cl/tiny_imagenet.yaml
+device: 0
+parameters:
+  tolerance: 0.01

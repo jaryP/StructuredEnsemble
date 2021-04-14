@@ -1,0 +1,10 @@
+dataset: tinyimagenet
+model: resnet32
+epochs: 200
+batch_size: 128
+eval: 0.1
+experiments: 2
+early_stopping:
+  tolerance: 20
+  value: eval
+

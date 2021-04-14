@@ -3,7 +3,7 @@ model: vgg11
 epochs: 50
 batch_size: 128
 eval: 0.1
-experiments: 1
+experiments: 2
 early_stopping:
   tolerance: 10
   value: eval

@@ -1,0 +1,11 @@
+method: snapshot
+name: n3
+save_path: results/cifar10_vgg11/snapshot
+load: Yes
+save: Yes
+optimizer: configs/optimizers/vgg_multistep_sdg_momentum.yaml
+trainer: configs/training/cifar10_vgg11.yaml
+device: 0
+method_parameters:
+  n_ensemble: 3
+  epochs_per_cycle: 50

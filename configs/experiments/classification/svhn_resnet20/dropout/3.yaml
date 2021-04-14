@@ -9,5 +9,5 @@ device: 0
 method_parameters:
   p: 0.25
   n_ensemble: 2
-  train_sample: 2
+  train_sample: 1
   test_sample: 5

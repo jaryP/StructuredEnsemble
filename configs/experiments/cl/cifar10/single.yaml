@@ -1,0 +1,8 @@
+method: batch_ensemble
+name: batch_ensemble
+save_path: results/cl/cifar10/
+load: Yes
+save: Yes
+optimizer: configs/optimizers/adam.yaml
+trainer: configs/training/cl/cifar10.yaml
+device: 0

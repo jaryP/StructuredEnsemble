@@ -3,7 +3,7 @@ name: n3
 save_path: results/svhn_vgg11/naive
 load: Yes
 save: Yes
-optimizer: configs/optimizers/multistep_sdg_momentum.yaml
+optimizer: configs/optimizers/vgg_multistep_sdg_momentum.yaml
 trainer: configs/training/svhn_vgg11.yaml
 device: 0
 method_parameters:

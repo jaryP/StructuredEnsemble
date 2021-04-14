@@ -106,12 +106,9 @@ def get_logits(method, dataset):
         else:
             predictions.extend(pred.tolist())
 
-        break
-
     true = np.asarray(true)
     predictions = np.asarray(predictions)
     probs = np.stack(probs, 1)
-    # probs = np.asarray(probs)
 
     return probs, true, predictions
 

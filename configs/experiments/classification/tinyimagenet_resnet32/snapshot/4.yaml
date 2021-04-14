@@ -1,0 +1,11 @@
+method: snapshot
+name: n4
+save_path: results/tinyimagenet_resnet32/snapshot
+load: Yes
+save: Yes
+optimizer: configs/optimizers/multistep_sdg_momentum.yaml
+trainer: configs/training/tinyimagenet_resnet32.yaml
+device: 0
+method_parameters:
+  n_ensemble: 4
+  epochs_per_cycle: 50

@@ -75,9 +75,10 @@ class CorruptedCifar10(VisionDataset):
         super(CorruptedCifar10, self).__init__(root, transform=transform,
                                                target_transform=target_transform)
 
-        assert severity <= 5, 'Severity must be in range [1, 5]'
+        assert 1 <= severity <= 5, 'Severity must be in range [1, 5]'
         assert corruption in chain(BENCHMARK_CORRUPTIONS, EXTRA_CORRUPTIONS), \
-            'Item need to be one of {}'.format(chain(BENCHMARK_CORRUPTIONS, EXTRA_CORRUPTIONS))
+            'Item need to be one of {}'.format(
+                chain(BENCHMARK_CORRUPTIONS, EXTRA_CORRUPTIONS))
 
         if download:
             pass
@@ -90,7 +91,8 @@ class CorruptedCifar10(VisionDataset):
                                ' You can use download=True to download it')
 
         # Tensorflow-inspired code
-        images_file = os.path.join(self.files_folder, F'{self.corruption_to_filename[corruption]}')
+        images_file = os.path.join(self.files_folder,
+                                   F'{self.corruption_to_filename[corruption]}')
         labels_file = os.path.join(self.files_folder, F'{self.labels_filename}')
 
         images = np.load(images_file)
@@ -140,7 +142,8 @@ class CorruptedCifar10(VisionDataset):
 
     def _check_exists(self) -> bool:
         for i in chain(BENCHMARK_CORRUPTIONS, EXTRA_CORRUPTIONS):
-            if not os.path.exists(os.path.join(self.files_folder, self.corruption_to_filename[i])):
+            if not os.path.exists(os.path.join(self.files_folder,
+                                               self.corruption_to_filename[i])):
                 return False
         return True
 
@@ -153,7 +156,9 @@ class CorruptedCifar10(VisionDataset):
         os.makedirs(self.root, exist_ok=True)
 
         filename = self.download_url.rpartition('/')[2]
-        download_and_extract_archive(self.download_url, download_root=self.folder, filename=filename, md5=None)
+        download_and_extract_archive(self.download_url,
+                                     download_root=self.folder,
+                                     filename=filename, md5=None)
         print('Done!')
 
 
@@ -191,7 +196,8 @@ class CorruptedCifar100(CorruptedCifar10):
                  target_transform: Optional[Callable] = None,
                  download: bool = False):
         super(CorruptedCifar100, self).__init__(root, transform=transform,
-                                                corruption=corruption, severity=severity,
+                                                corruption=corruption,
+                                                severity=severity,
                                                 download=download,
                                                 target_transform=target_transform)
 
@@ -200,17 +206,20 @@ class CorruptedCifar100(CorruptedCifar10):
         return os.path.join(self.folder, 'CIFAR-100-C')
 
 
-def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False, dataset='cifar10_vgg11'):
-    assert dataset in ['cifar100', 'cifar10_vgg11']
+def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False,
+                                dataset='cifar10', normalize=False):
+    assert dataset in ['cifar100', 'cifar10']
 
-    if dataset == 'cifar10_vgg11':
+    if dataset == 'cifar10':
         dataset = CorruptedCifar10
         t = [transforms.ToTensor(),
-             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))]
+             transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                  (0.2023, 0.1994, 0.2010))]
     else:
         dataset = CorruptedCifar100
         t = [transforms.ToTensor(),
-             transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))]
+             transforms.Normalize((0.5071, 0.4867, 0.4408),
+                                  (0.2675, 0.2565, 0.2761))]
 
     if use_extra_corruptions:
         corruptions = chain(BENCHMARK_CORRUPTIONS, EXTRA_CORRUPTIONS)
@@ -219,16 +228,23 @@ def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False,
 
     scores = {name: {} for name in corruptions}
     entropy = {name: {} for name in corruptions}
-    buc = {name: {} for name in corruptions}
+    preds = {name: {} for name in corruptions}
     eces = {name: {} for name in corruptions}
+
+    true_labels = None
 
     for name in corruptions:
         for severity in range(1, 6):
             # CIFAR 10
-            loader = torch.utils.data.DataLoader(dataset=dataset('./datasets/', download=True,
-                                                                          corruption=name, severity=severity,
-                                                                          transform=transforms.Compose(t)),
-                                                 batch_size=batch_size, shuffle=False,
+            loader = torch.utils.data.DataLoader(dataset=
+                                                 dataset('./datasets/',
+                                                         download=True,
+                                                         corruption=name,
+                                                         severity=severity,
+                                                         transform=
+                                                         transforms.Compose(t)),
+                                                 batch_size=batch_size,
+                                                 shuffle=False,
                                                  pin_memory=True, num_workers=4)
 
             ece, _, _, _ = ece_score(method, loader)
@@ -236,16 +252,32 @@ def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False,
             eces[name][severity] = ece
             scores[name][severity] = eval_method(method, dataset=loader)
 
-            logits, labels, predictions = get_logits(method, loader)
+            probs, labels, predictions = get_logits(method, loader)
+            if true_labels is None:
+                true_labels = labels
 
-            _entropy = dataset_entropy(logits)
-            _bcu = epistemic_aleatoric_uncertainty(logits)[0]
+            hs = []
+            for x, y in loader:
+                # true.extend(y.tolist())
+                p, _ = method.predict_proba(x, y, True)
+
+                plog = (p + 1e-12).log()
+                h = plog * p
+                if normalize:
+                    h = h / np.log(h.shape[-1])
+                h = -torch.sum(h, -1)
+                hs.extend(h.tolist())
+
+            # _entropy = dataset_entropy(probs)
+            # _bcu = epistemic_aleatoric_uncertainty(logits)[0]
             # mask = labels == predictions
             # print(mask)
             # print(_bcu.shape, entropy.shape, mask.shape)
+            # entropy[name][severity] = _entropy
+            entropy[name][severity] = hs
+            preds[name][severity] = predictions
 
-            entropy[name][severity] = np.mean(_entropy)
-            buc[name][severity] = np.mean(_bcu)
+            # buc[name][severity] = np.mean(_bcu)
             # print(labels == predictions)
             # print(name, severity)
             # print(scores[name][severity])
@@ -254,21 +286,33 @@ def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False,
             # print(np.mean(bcu[mask]), np.mean(buc[~mask]))
             # print(np.mean(entropy[mask]), np.mean(entropy[~mask]))
 
-    return entropy, scores, buc, ece
+    return entropy, preds, scores, true_labels
 
 
 def dataset_entropy(logits):
     # TODO: Implementae mia incertezza
     with torch.no_grad():
         # probs, true = get_logits(method, dataset)
-        logits = logits.mean(1)
+        logits = logits.mean(0)
         classes = logits.shape[-1]
+        """
+        plog = (p + 1e-12).log()
+        h = plog * p
+        if normalize:
+            h = h / np.log(h.shape[-1])
+        h = -torch.sum(h, -1)
+        """
+        exp = np.exp(logits)
+        softmax = exp / exp.sum(-1, keepdims=True)
 
-        softmax = np.exp(logits)
-        softmax = softmax / softmax.sum(1, keepdims=True)
+        # plog = (softmax + 1e-12).log()
+        # h = plog * softmax
+        # h = h / np.log(h.shape[-1])
+        # h = -torch.sum(h, -1)
 
+        # print(softmax[0], softmax[0].sum())
         entropy = (softmax * np.log(softmax + 1e-12)) / np.log(classes)
-        entropy = -entropy.sum(1)  # / np.log(classes)
+        entropy = -entropy.sum(-1)  # / np.log(classes)
         # entropy = np.mean(entropy)
 
     return entropy

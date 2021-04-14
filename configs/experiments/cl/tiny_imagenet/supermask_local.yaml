@@ -1,0 +1,12 @@
+method: supermask
+name: local
+save_path: results/cl/tiny_imagenet/supermask
+load: Yes
+save: Yes
+optimizer: configs/optimizers/l2_adam.yaml
+trainer: configs/training/cl/tiny_imagenet.yaml
+device: 0
+parameters:
+  mask_epochs: 20
+  global_pruning: No
+  pruning_percentage: 0.5

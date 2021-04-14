@@ -3,6 +3,6 @@ name: exp1
 save_path: results/cifar10_vgg11/normal
 load: Yes
 save: Yes
-optimizer: configs/optimizers/multistep_sdg_momentum.yaml
+optimizer: configs/optimizers/vgg_multistep_sdg_momentum.yaml
 trainer: configs/training/cifar10_vgg11.yaml
 device: 0

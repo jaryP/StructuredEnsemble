@@ -1,10 +1,10 @@
 method: naive
 name: n3
-save_path: results/cifar100_vgg11/naive
+save_path: results/cifar100_resnet20/naive
 load: Yes
 save: Yes
 optimizer: configs/optimizers/multistep_sdg_momentum.yaml
-trainer: configs/training/cifar100_vgg11.yaml
+trainer: configs/training/cifar100_resnet20.yaml
 device: 0
 method_parameters:
   n_ensemble: 3

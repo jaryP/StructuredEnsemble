@@ -1,0 +1,10 @@
+method: pruning
+name: pruning1
+save_path: results/cl/cifar10/
+load: Yes
+save: Yes
+optimizer: configs/optimizers/adam.yaml
+trainer: configs/training/cl/cifar10.yaml
+device: 0
+parameters:
+  tolerance: 0.01

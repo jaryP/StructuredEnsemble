@@ -1,6 +1,8 @@
 import os
 import pickle
 import sys
+from builtins import print
+from collections import defaultdict
 
 import numpy as np
 import torch
@@ -110,9 +112,9 @@ for experiment in args.files:
         already_present = ensures_path(seed_path)
 
         hs = [
-              logging.StreamHandler(sys.stdout),
-              # logging.StreamHandler(sys.stderr)
-              ]
+            logging.StreamHandler(sys.stdout),
+            # logging.StreamHandler(sys.stderr)
+        ]
 
         hs.append(
             logging.FileHandler(os.path.join(seed_path, 'info.log'), mode='w'))
@@ -234,72 +236,218 @@ for experiment in args.files:
         logger.info('Ensemble '
                     'score on test: {}'.format(
             eval_method(method, dataset=test_loader)[0]))
+        
+        if method_name != 'normal' and trainer['dataset'] != 'tinyimagenet':
+            print(trainer['dataset'])
+            _test_loader = torch.utils.data.DataLoader(dataset=test,
+                                                      batch_size=batch_size,
+                                                      shuffle=False,
+                                                      pin_memory=True,
+                                                      num_workers=4)
 
-        if to_load and os.path.exists(os.path.join(seed_path, 'fgsm.pkl')):
-            with open(os.path.join(seed_path, 'fgsm.pkl'), 'rb') as file:
-                fgsm = pickle.load(file)
+            true, predictions, probs, hs = \
+                perturbed_predictions(method,
+                                      _test_loader,
+                                      epsilon=0, device=method.device,
+                                      normalize=True)
 
-            logger.info('fgsm results loaded.')
-        else:
-            fgsm = {}
-            
-            for e in [0, 0.001, 0.01, 0.02, 0.1, 0.5]:
-                true, predictions, probs, hs = \
-                    perturbed_predictions(method,
-                                          test_loader,
-                                          epsilon=e, device=method.device)
+            logger.info('Mean entropy on test: {}'.format(np.mean(hs)))
+            logger.info('Correctly classified '
+                        'entropy on test: {}'.format(np.mean(
+                [h for i, h in enumerate(hs) if true[i] == predictions[i]])))
+            logger.info('Wrongly classified '
+                        'entropy on test: {}'.format(np.mean(
+                [h for i, h in enumerate(hs) if true[i] != predictions[i]])))
 
-                fgsm[e] = {'true': true, 'predictions': predictions,
-                           'probs': probs, 'entropy': hs}
+            if to_load and os.path.exists(os.path.join(seed_path, 'fgsm.pkl')):
+                with open(os.path.join(seed_path, 'fgsm.pkl'), 'rb') as file:
+                    fgsm = pickle.load(file)
 
-            with open(os.path.join(seed_path, 'fgsm.pkl'), 'wb') as file:
-                pickle.dump(fgsm, file, protocol=pickle.HIGHEST_PROTOCOL)
-            logger.info('fgsm results saved.')
+                logger.info('fgsm results loaded.')
+            else:
+                fgsm = {}
 
-        for e, v in fgsm.items():
-            true, predictions, probs, hs = v['true'], \
-                                           v['predictions'], \
-                                           v['probs'], \
-                                           v['entropy']
+                for e in [0, 0.001, 0.01, 0.02, 0.1, 0.5]:
+                    true, predictions, probs, hs = \
+                        perturbed_predictions(method,
+                                              _test_loader,
+                                              epsilon=e, device=method.device)
 
-            logger.info('FGSM. Epsilon {}'.format(e))
+                    fgsm[e] = {'true': true, 'predictions': predictions,
+                               'probs': probs, 'entropy': hs}
+
+                with open(os.path.join(seed_path, 'fgsm.pkl'), 'wb') as file:
+                    pickle.dump(fgsm, file, protocol=pickle.HIGHEST_PROTOCOL)
+                logger.info('fgsm results saved.')
+
+            true, predictions, probs, hs = \
+                perturbed_predictions(method,
+                                      eval_loader,
+                                      epsilon=0, device=method.device)
+            # v = fgsm[0]
+            # true, predictions, probs, hs = v['true'], \
+            #                                v['predictions'], \
+            #                                v['probs'], \
+            #                                v['entropy']
+
             cph = [h for i, h in enumerate(hs) if true[i] == predictions[i]]
-            wph = [h for i, h in enumerate(hs) if true[i] != predictions[i]]
-            logger.info('\tCorrectly classified entropy: {} (+-{}) # {} \n\t'
-                        'Wrongly classified entropy: {} (+-{}) # {}'.format(
-                        np.mean(cph),
-                        np.std(cph),
-                        len(cph),
-                        np.mean(wph),
-                        np.std(wph),
-                        len(wph)))
+            q3 = np.quantile(cph, 0.75)
+            q1 = np.quantile(cph, 0.25)
 
-        # if trainer['dataset'] in ['cifar10_vgg11', 'cifar100']:
-        #     if to_load and os.path.exists(
-        #             os.path.join(seed_path, 'corrupted.pkl')):
-        #         with open(os.path.join(seed_path, 'corrupted.pkl'),
-        #                   'rb') as file:
-        #             corrupted = pickle.load(file)
-        #
-        #         logger.info('corrupted cifar results loaded.')
-        #
-        #     else:
-        #
-        #         entropy, scores, buc, ece = corrupted_cifar_uncertainty(method,
-        #                                                                 batch_size * 2,
-        #                                                                 dataset=
-        #                                                                 trainer[
-        #                                                                     'dataset'])
-        #
-        #         with open(os.path.join(seed_path, 'corrupted.pkl'),
-        #                   'wb') as file:
-        #             pickle.dump({'entropy': entropy,
-        #                          'scores': scores,
-        #                          'buc': buc,
-        #                          'ece': ece}, file,
-        #                         protocol=pickle.HIGHEST_PROTOCOL)
-        #
-        #         logger.info('corrupted results saved.')
+            # for gamma in np.linspace(0, 3, 10, endpoint=True):
+
+            # threshold = q3 + gamma * (q3 - q1)
+
+            # cph = [h for i, h in enumerate(hs) if true[i] == predictions[i]]
+            # mcph = np.mean(cph)
+            # scph = np.std(cph)
+            # threshold = mcph + .5 * scph
+
+            # logger.info('#'*100)
+            #
+            # logger.info('Uncertainty tests. Mean (std): {} ({}) '
+            #             'Threshold {} (gamma: {})'.
+            #             format(q1, q3, threshold, gamma))
+            #
+            for e, v in fgsm.items():
+                if e == 0:
+                    continue
+
+                true, predictions, probs, hs = v['true'], \
+                                               v['predictions'], \
+                                               v['probs'], \
+                                               v['entropy']
+
+                cp = [1 for t, p in zip(true, predictions) if t == p]
+                score = sum(cp) / len(true)
+
+                cph = [h for i, h in enumerate(hs) if true[i] == predictions[i]]
+                wph = [h for i, h in enumerate(hs) if true[i] != predictions[i]]
+                tot = len(true)
+
+                logger.info('#' * 100)
+                logger.info('FGSM. Epsilon {}. Accuracy {}'.format(e, score))
+                # logger.info('Uncertainty tests. Mean (std): {} ({}) '
+                #             'Threshold {} (gamma: {})'.
+                #             format(q1, q3, threshold, gamma))
+                # logger.info('Uncertainty tests. Mean (std): {} ({}) '
+                #             'Threshold {} (gamma: {})'.
+                #             format(q1, q3, threshold, gamma))
+
+                for gamma in np.linspace(0, 3, 10, endpoint=True):
+                    threshold = q3 + gamma * (q3 - q1)
+
+                    # logger.info('\tCorrectly classified entropy: {} (+-{}) # {}, '
+                    #             'wrongly classified entropy: {} (+-{}) # {}'.format(
+                    #     np.mean(cph),
+                    #     np.std(cph),
+                    #     len(cph),
+                    #     np.mean(wph),
+                    #     np.std(wph),
+                    #     len(wph)))
+
+                    correctly_predicted = 0
+                    correctly_predicted_discarded = 0
+                    wrongly_predicted_discarded = 0
+                    discarded = 0
+
+                    for t, p, h in zip(true, predictions, hs):
+                        if h <= threshold:
+                            if t == p:
+                                correctly_predicted += 1
+                        else:
+                            discarded += 1
+                            if t == p:
+                                correctly_predicted_discarded += 1
+                            else:
+                                wrongly_predicted_discarded += 1
+
+                    d = (len(true) - discarded)
+                    acc = correctly_predicted / d if d > 0 else -1
+
+                    logger.info('\tGamma: {}, '
+                                'Discarded samples: {} ({}). '
+                                'CDS {}. '
+                                'WDS {}. '
+                                'FA: {}'.
+                                format(gamma,
+                                       discarded, discarded / tot,
+                                       wrongly_predicted_discarded,
+                                       correctly_predicted_discarded,
+                                       acc))
+
+            if trainer['dataset'] in ['cifar10', 'cifar100']:
+                if to_load and os.path.exists(
+                        os.path.join(seed_path, 'corrupted.pkl')):
+                    with open(os.path.join(seed_path, 'corrupted.pkl'),
+                              'rb') as file:
+                        corrupted = pickle.load(file)
+
+                    logger.info('corrupted cifar results loaded.')
+                # if True:
+                else:
+                    logger.info('corrupted cifar experiments.')
+
+                    with torch.no_grad():
+                        entropy, preds, scores, true_labels = \
+                            corrupted_cifar_uncertainty(method,
+                                                        batch_size,
+                                                        dataset=
+                                                        trainer['dataset'])
+
+                    with open(os.path.join(seed_path, 'corrupted.pkl'),
+                              'wb') as file:
+                        corrupted = {'entropy': entropy,
+                                     'scores': scores,
+                                     'preds': preds,
+                                     'true_labels': true_labels}
+                        pickle.dump(corrupted, file,
+                                    protocol=pickle.HIGHEST_PROTOCOL)
+
+                    logger.info('corrupted results saved.')
+
+                names = corrupted['entropy'].keys()
+
+                true = corrupted['true_labels']
+                threshold = q3 + 0 * (q3 - q1)
+
+                results = defaultdict(list)
+                discarded = defaultdict(list)
+                base_results = defaultdict(list)
+
+                for n in names:
+                    entropy = corrupted['entropy'][n]
+                    pred = corrupted['preds'][n]
+                    scores = corrupted['scores'][n]
+                    for severity in entropy.keys():
+                        # print(np.mean(entropy[severity]),
+                        #       np.std(entropy[severity]))
+                        correct = 0
+                        d = 0
+
+                        for h, p, t in zip(entropy[severity],
+                                           pred[severity],
+                                           true):
+                            if h <= threshold:
+                                if p == t:
+                                    correct += 1
+                            else:
+                                d += 1
+
+                        score = 0 if correct == 0 else correct/(len(true)-d)
+                        base = scores[severity][0][1]
+                        d = 0 if d == 0 else d/len(true)
+
+                        results[severity].append(score)
+                        discarded[severity].append(d)
+
+                        base_results[severity].append(base)
+                logger.info('C-CIFAR results')
+                for key in results:
+                    logger.info('Severity: {}, A: {}, D: {}, FA: {}'.format(key,
+                          np.mean(base_results[key]),
+                          np.mean(discarded[key]),
+                          np.mean(results[key])))
 
         params = 0
         if hasattr(method, 'models'):
@@ -315,3 +463,4 @@ for experiment in args.files:
         ece, _, _, _ = ece_score(method, test_loader)
 
         logger.info('Ece score: {}'.format(ece))
+

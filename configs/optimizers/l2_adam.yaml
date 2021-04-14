@@ -1,0 +1,4 @@
+lr: 0.001
+l1: 0
+l2: 0.0001
+optimizer: adam

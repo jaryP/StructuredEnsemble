@@ -1,0 +1,10 @@
+method: supsup
+name: supsup
+save_path: results/cl/cifar100/
+load: Yes
+save: Yes
+optimizer: configs/optimizers/adam.yaml
+trainer: configs/training/cl/cifar100.yaml
+device: 0
+parameters:
+  pruning_percentage: 0.5

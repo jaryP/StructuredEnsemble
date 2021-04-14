@@ -2,7 +2,8 @@ import torch
 import torchvision
 from continual_learning.backbone_networks import LeNet_300_100, LeNet, vgg11, \
     AlexNet, resnet20
-from continual_learning.benchmarks import MNIST, CIFAR10, CIFAR100
+from continual_learning.backbone_networks.vgg import custom_vgg
+from continual_learning.datasets import MNIST, CIFAR10, CIFAR100, TinyImagenet
 from continual_learning.methods import Naive
 from continual_learning.methods.task_incremental.multi_task.gg import \
     SingleTask, Pruning, SupermaskSuperposition, SuperMask, BatchEnsemble
@@ -12,8 +13,9 @@ from torchvision.transforms import transforms
 
 def get_cl_dataset(name, model_name):
     if name == 'mnist':
-        t = [torchvision.transforms.Resize((32, 32)),
+        t = [
              torchvision.transforms.ToTensor(),
+             torchvision.transforms.Resize((32, 32)),
              torchvision.transforms.Normalize((0.1307,), (0.3081,)),
              ]
         if model_name == 'lenet-300-100':
@@ -22,9 +24,10 @@ def get_cl_dataset(name, model_name):
         t = torchvision.transforms.Compose(t)
 
         dataset = MNIST(
-            data_folder='./datasets_cl/mnist/',
+            data_folder='./datasets/mnist/MNIST/raw',
             download_if_missing=True,
-            transformer=t)
+            transformer=t,
+            test_transformer=t)
 
         classes = 10
         input_size = 1
@@ -81,9 +84,9 @@ def get_cl_dataset(name, model_name):
 
     elif name == 'cifar100':
         tt = [
+            transforms.ToTensor(),
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465),
                                  (0.2023, 0.1994, 0.2010))]
 
@@ -96,12 +99,36 @@ def get_cl_dataset(name, model_name):
         train_transform = transforms.Compose(tt)
 
         dataset = CIFAR100(
-            data_folder='./datasets_cl/cifar10',
+            data_folder='./datasets_cl/cifar100',
             download_if_missing=True,
             transformer=train_transform, test_transformer=transform)
 
         input_size, classes = 3, 100
+    elif name == 'tiny-imagenet':
+        tt = [
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5),
+                                 (0.5, 0.5, 0.5)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(56),
+            transforms.Resize(64)
+        ]
 
+        t = [
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5),
+                                 (0.5, 0.5, 0.5))
+        ]
+
+        transform = transforms.Compose(t)
+        train_transform = transforms.Compose(tt)
+
+        dataset = TinyImagenet(
+            data_folder='./datasets_cl/',
+            download_if_missing=True,
+            transformer=train_transform, test_transformer=transform)
+
+        input_size, classes = 3, 200
     else:
         assert False
 
@@ -118,6 +145,9 @@ def get_cl_model(name, input_size=None):
         # if 'bn' in name:
         if name == 'vgg11':
             model = vgg11(pretrained=False)
+        elif name == 'half-vgg11':
+            model = custom_vgg(
+                [32, 'M', 64, 'M', 128, 128, 'M', 256, 256, 'M', 256, 256, 'M'])
         else:
             assert False
 
@@ -156,14 +186,14 @@ def get_cl_model(name, input_size=None):
 def get_cl_method(name, backbone, parameters, device):
     name = name.lower()
 
-    if name == 'ensemble':
+    if name == 'single':
         return SingleTask()
     elif name == 'batch_ensemble':
         return BatchEnsemble(backbone)
     elif name == 'naive':
         return Naive()
     elif name == 'pruning':
-        return Pruning(backbone=backbone, **parameters)
+        return Pruning(backbone=backbone, device=device, **parameters)
     elif name == 'supsup':
         return SupermaskSuperposition(backbone=backbone, **parameters)
     elif name == 'supermask':
