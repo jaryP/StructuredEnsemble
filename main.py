@@ -15,10 +15,7 @@ from methods import SingleModel, Naive, SuperMask
 from methods.batch_ensemble.batch_ensemble import BatchEnsemble
 from methods.dropout.dropout import MCDropout
 from methods.snapshot.snapshot import Snapshot
-from methods.supermask.supermask_after_training import \
-    BatchPruningSuperMaskPostTraining
-from methods.supermask.supermask_training import BatchForwardPruningSuperMask, \
-    ExtremeBatchPruningSuperMask
+from methods.supermask.supermask import ExtremeBatchPruningSuperMask
 from utils import get_optimizer, get_dataset, get_model, EarlyStopping, \
     ensures_path, calculate_trainable_parameters
 import yaml
@@ -182,21 +179,6 @@ for experiment in args.files:
             method = ExtremeBatchPruningSuperMask(model=model,
                                                   method_parameters=method_parameters,
                                                   device=device)
-            # method = BatchForwardPruningSuperMask(model=model,
-            #                                       method_parameters=method_parameters,
-            #                                       device=device)
-            # method = BatchPruningSuperMask(model=model, method_parameters=method_parameters, device=device)
-        elif method_name == 'grad_supermask_post':
-            method = BatchPruningSuperMaskPostTraining(model=model,
-                                                       method_parameters=
-                                                       method_parameters,
-                                                       device=device)
-        # elif method_name == 'reverse_supermask':
-        # method = ReverseSuperMask(model=model, method_parameters=method_parameters, device=device)
-        # elif method_name == 'grad_supermask':
-        # method = GradSuperMask(model=model, method_parameters=method_parameters, device=device)
-        # elif method_name == 'tree_supermask':
-        # method = TreeSuperMask(model=model, method_parameters=method_parameters, device=device)
         elif method_name == 'mc_dropout':
             method = MCDropout(model=model, method_parameters=method_parameters,
                                device=device)
@@ -227,11 +209,6 @@ for experiment in args.files:
                 with open(os.path.join(seed_path, 'results.pkl'), 'wb') as file:
                     pickle.dump(results, file, protocol=pickle.HIGHEST_PROTOCOL)
                 logger.info('Results and models saved.')
-
-        # logger.info('Ensemble score on train: {}'.format(eval_method(method,
-        # dataset=train_loader)[0]))
-        # logger.info('Ensemble score on eval: {}'.format(eval_method(method,
-        # dataset=eval_loader)[0]))
 
         logger.info('Ensemble '
                     'score on test: {}'.format(
@@ -284,31 +261,11 @@ for experiment in args.files:
                 perturbed_predictions(method,
                                       eval_loader,
                                       epsilon=0, device=method.device)
-            # v = fgsm[0]
-            # true, predictions, probs, hs = v['true'], \
-            #                                v['predictions'], \
-            #                                v['probs'], \
-            #                                v['entropy']
 
             cph = [h for i, h in enumerate(hs) if true[i] == predictions[i]]
             q3 = np.quantile(cph, 0.75)
             q1 = np.quantile(cph, 0.25)
 
-            # for gamma in np.linspace(0, 3, 10, endpoint=True):
-
-            # threshold = q3 + gamma * (q3 - q1)
-
-            # cph = [h for i, h in enumerate(hs) if true[i] == predictions[i]]
-            # mcph = np.mean(cph)
-            # scph = np.std(cph)
-            # threshold = mcph + .5 * scph
-
-            # logger.info('#'*100)
-            #
-            # logger.info('Uncertainty tests. Mean (std): {} ({}) '
-            #             'Threshold {} (gamma: {})'.
-            #             format(q1, q3, threshold, gamma))
-            #
             for e, v in fgsm.items():
                 if e == 0:
                     continue
@@ -327,24 +284,9 @@ for experiment in args.files:
 
                 logger.info('#' * 100)
                 logger.info('FGSM. Epsilon {}. Accuracy {}'.format(e, score))
-                # logger.info('Uncertainty tests. Mean (std): {} ({}) '
-                #             'Threshold {} (gamma: {})'.
-                #             format(q1, q3, threshold, gamma))
-                # logger.info('Uncertainty tests. Mean (std): {} ({}) '
-                #             'Threshold {} (gamma: {})'.
-                #             format(q1, q3, threshold, gamma))
 
                 for gamma in np.linspace(0, 3, 10, endpoint=True):
                     threshold = q3 + gamma * (q3 - q1)
-
-                    # logger.info('\tCorrectly classified entropy: {} (+-{}) # {}, '
-                    #             'wrongly classified entropy: {} (+-{}) # {}'.format(
-                    #     np.mean(cph),
-                    #     np.std(cph),
-                    #     len(cph),
-                    #     np.mean(wph),
-                    #     np.std(wph),
-                    #     len(wph)))
 
                     correctly_predicted = 0
                     correctly_predicted_discarded = 0
@@ -420,8 +362,6 @@ for experiment in args.files:
                     pred = corrupted['preds'][n]
                     scores = corrupted['scores'][n]
                     for severity in entropy.keys():
-                        # print(np.mean(entropy[severity]),
-                        #       np.std(entropy[severity]))
                         correct = 0
                         d = 0
 

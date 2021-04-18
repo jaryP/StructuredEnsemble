@@ -1,0 +1,8 @@
+method: normal
+name: normal
+save_path: results/tinyimagenet_vgg16/normal
+load: Yes
+save: Yes
+optimizer: configs/optimizers/vgg_multistep_sdg_momentum.yaml
+trainer: configs/training/tinyimagenet_vgg16.yaml
+device: cpu

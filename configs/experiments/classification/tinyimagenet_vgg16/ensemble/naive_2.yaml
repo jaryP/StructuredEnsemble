@@ -1,0 +1,10 @@
+method: naive
+name: n2
+save_path: results/tinyimagenet_vgg16/naive
+load: Yes
+save: Yes
+optimizer: configs/optimizers/vgg_multistep_sdg_momentum.yaml
+trainer: configs/training/tinyimagenet_vgg16.yaml
+device: 0
+method_parameters:
+  n_ensemble: 2

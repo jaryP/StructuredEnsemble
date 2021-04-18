@@ -1,60 +1,6 @@
-from copy import deepcopy
-
 from torch import nn as nn
-from torch.nn import BatchNorm2d
 
-from methods.supermask.layers import BatchEnsembleMaskedWrapper, EnsembleMaskedWrapper
-
-
-class _ResNetBlockWrapper(nn.Module):
-    def __init__(self, block, masks_params: dict, ensemble: int = 1,
-                 t: int = 1, batch_ensemble=True, ):
-        super().__init__()
-
-        if batch_ensemble:
-            wrapper = BatchEnsembleMaskedWrapper
-        else:
-            wrapper = EnsembleMaskedWrapper
-
-        self.block = block
-        self.masks_params = masks_params
-
-        self.conv1 = wrapper(block.conv1, where='output', masks_params=masks_params,
-                             ensemble=ensemble, t=t)
-
-        self.relu = nn.ReLU(inplace=True)
-        # self.conv2 = wrapper(block.conv2, where='output', masks_params=masks_params,
-        #                      ensemble=ensemble, t=t)
-        self.conv2 = self.block.conv2
-
-        self.shortcut = block.shortcut
-
-        if isinstance(self.shortcut, nn.Sequential):
-            if len(self.shortcut) > 0:
-                # pass
-                # else:
-                # if block.downsample is not None:
-                self.shortcut[0] = wrapper(self.downsample[0], where='output', masks_params=masks_params,
-                                             ensemble=ensemble)
-
-
-    def forward(self, x):
-        identity = x
-
-        out = self.conv1(x)
-        out = self.block.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.block.bn2(out)
-
-        # if self.downsample is not None:
-        #     identity = self.downsample(x)
-
-        out += self.shortcut(x)
-        out = self.relu(out)
-
-        return out
+from methods.supermask.layers import BatchEnsembleMaskedWrapper
 
 
 class ResNetBlockWrapper(nn.Module):
@@ -235,7 +181,7 @@ class ResNetBlockWrapper(nn.Module):
 
 if __name__ == '__main__':
     import torch
-    from models import resnet20, LambdaLayer
+    from models import resnet20
 
     # import torchvision.models as models
     from collections import defaultdict

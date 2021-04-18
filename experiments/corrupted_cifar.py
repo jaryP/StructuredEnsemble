@@ -268,31 +268,14 @@ def corrupted_cifar_uncertainty(method, batch_size, use_extra_corruptions=False,
                 h = -torch.sum(h, -1)
                 hs.extend(h.tolist())
 
-            # _entropy = dataset_entropy(probs)
-            # _bcu = epistemic_aleatoric_uncertainty(logits)[0]
-            # mask = labels == predictions
-            # print(mask)
-            # print(_bcu.shape, entropy.shape, mask.shape)
-            # entropy[name][severity] = _entropy
             entropy[name][severity] = hs
             preds[name][severity] = predictions
-
-            # buc[name][severity] = np.mean(_bcu)
-            # print(labels == predictions)
-            # print(name, severity)
-            # print(scores[name][severity])
-            # print(np.mean(_bcu[mask]), np.mean(_bcu[~mask]))
-            # print(np.mean(_entropy[mask]), np.mean(_entropy[~mask]))
-            # print(np.mean(bcu[mask]), np.mean(buc[~mask]))
-            # print(np.mean(entropy[mask]), np.mean(entropy[~mask]))
 
     return entropy, preds, scores, true_labels
 
 
 def dataset_entropy(logits):
-    # TODO: Implementae mia incertezza
     with torch.no_grad():
-        # probs, true = get_logits(method, dataset)
         logits = logits.mean(0)
         classes = logits.shape[-1]
         """
@@ -304,84 +287,7 @@ def dataset_entropy(logits):
         """
         exp = np.exp(logits)
         softmax = exp / exp.sum(-1, keepdims=True)
-
-        # plog = (softmax + 1e-12).log()
-        # h = plog * softmax
-        # h = h / np.log(h.shape[-1])
-        # h = -torch.sum(h, -1)
-
-        # print(softmax[0], softmax[0].sum())
         entropy = (softmax * np.log(softmax + 1e-12)) / np.log(classes)
-        entropy = -entropy.sum(-1)  # / np.log(classes)
-        # entropy = np.mean(entropy)
+        entropy = -entropy.sum(-1)
 
     return entropy
-
-
-def det(x):
-    classes = x.shape[-1]
-
-    mn = 1 / (classes ** classes)
-    mx = mn * (2 ** (classes - 1))
-
-    det = np.linalg.det(x + (np.eye(classes) / classes))
-    det = (det - mn) / (mx - mn)
-
-    return det
-
-
-def epistemic_aleatoric_uncertainty(logits):
-    if len(logits.shape) == 2:
-        logits = logits.unsqueeze(0)
-
-    softmax = np.exp(logits)
-    softmax = softmax / softmax.sum(2, keepdims=True)
-    p_hat = np.mean(softmax, 1)
-
-    # p = torch.softmax(, 2)
-    #
-    # p = p.detach().cpu().numpy()
-    # p = np.transpose(p, (1, 0, 2))
-    #
-    # p_hat = p_hat.detach().cpu().numpy()
-
-    t = softmax.shape[1]
-    classes = softmax.shape[-1]
-
-    determinants = []
-    variances = []
-
-    mn = classes ** -classes
-    mx = mn * np.power(2, classes - 1)
-
-    for _bi in range(softmax.shape[0]):
-        _bp = softmax[_bi]
-        _bp_hat = p_hat[_bi]
-
-        al = np.zeros((classes, classes))
-        ep = np.zeros((classes, classes))
-
-        for i in range(t):
-            _p = _bp[i]
-            aleatoric = np.diag(_p) - np.outer(_p, _p)
-            al += aleatoric
-            d = _p - _bp_hat
-            epistemic = np.outer(d, d)
-            ep += epistemic
-
-        al /= t
-        ep /= t
-
-        var = al + ep
-
-        variances.append(var)
-
-        det = np.linalg.det(var + (np.eye(classes) / classes))
-        det = (det - mn) / (mx - mn)
-
-        determinants.append(det)
-
-    determinants = np.asarray(determinants)
-    variances = np.asarray(variances)
-
-    return determinants, variances

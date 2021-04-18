@@ -1,20 +1,14 @@
 from copy import deepcopy
-import torch
 from torch import nn
 from torch.nn import BatchNorm2d
 from torchvision.models import VGG
 import numpy as np
-# from torchvision.models.resnet import BasicBlock, ResNet
 import torch.nn.functional as F
 
 from methods.supermask.layers import EnsembleMaskedWrapper, \
     BatchEnsembleMaskedWrapper, BatchEnsembleForwardMaskedWrapper
 from methods.supermask.resnet_utils import ResNetBlockWrapper
 from models import ResNet, BasicBlock
-
-
-def copy_sequential(s):
-    return deepcopy(s)
 
 
 def add_wrappers_to_model(module,

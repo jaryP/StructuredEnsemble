@@ -1,0 +1,13 @@
+method: mc_dropout
+name: n4
+save_path: results/tinyimagenet_vgg16/dropout
+load: Yes
+save: Yes
+optimizer: configs/optimizers/vgg_multistep_sdg_momentum.yaml
+trainer: configs/training/tinyimagenet_vgg16.yaml
+device: 0
+method_parameters:
+  p: 0.25
+  n_ensemble: 2
+  train_sample: 1
+  test_sample: 5
