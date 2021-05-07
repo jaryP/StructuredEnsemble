@@ -2,9 +2,9 @@
 
 This repository contains a PyTorch implementation of the paper: 
 
-### Structured Ensembles: an Approach to Reduce the Memory Footprint of Ensemble Methods
-<!--[Structured Ensembles: an Approach to Reduce the Memory Footprint of Ensemble Methods]()\ -->
-[Jary Pomponi](https://www.semanticscholar.org/author/Jary-Pomponi/1387980523), [Simone Scardapane](http://ispac.diet.uniroma1.it/scardapane/), [Aurelio Uncini](http://www.uncini.com/)
+### [Structured Ensembles: an Approach to Reduce the Memory Footprint of Ensemble Methods](https://arxiv.org/abs/2105.02551)
+<!--[Structured Ensembles: an Approach to Reduce the Memory Footprint of Ensemble Methods](https://arxiv.org/abs/2105.02551)\ -->
+[Jary Pomponi](https://www.semanticscholar.org/author/Jary-Pomponi/1387980523), [Simone Scardapane](https://www.sscardapane.it/), [Aurelio Uncini](http://www.uncini.com/)
 
 ### Abstract
 In this paper, we propose a novel ensembling technique for deep neural networks, which is able to drastically reduce the
@@ -51,6 +51,12 @@ If you want to use TinyImagenet you need to download and preprocess it first, us
 Please cite our work if you find it useful:
 
 ```
-@article{
+@misc{pomponi2021structured,
+      title={Structured Ensembles: an Approach to Reduce the Memory Footprint of Ensemble Methods}, 
+      author={Jary Pomponi and Simone Scardapane and Aurelio Uncini},
+      year={2021},
+      eprint={2105.02551},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
 }
 ```
